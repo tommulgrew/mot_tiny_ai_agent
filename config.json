@@ -1,0 +1,6 @@
+{
+    "$schema": "config-schema.json",
+    "model": {
+        "name": "qwen/qwen3-8b"
+    }
+}

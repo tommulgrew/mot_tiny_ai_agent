@@ -1,0 +1,40 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "title": "Tiny agent config",
+    "type": "object",
+    "additionalProperties": false,
+
+    "properties": {
+        "$schema": {
+            "type": "string"
+        },
+        "model": {
+            "type": "object",
+            "additionalProperties": false,
+            "description": "LLM chat completion service configuration",
+            "properties": {
+                "name": {
+                    "type": "string",
+                    "description": "The name of the LLM model to use"
+                },
+                "url": {
+                    "type": "string",
+                    "description": "URL to chat completions service. Currently supports OpenAI protocol (e.g. LM Studio)",
+                    "default": "http://localhost:1234/v1"
+                },
+                "api_key": {
+                    "type": "string",
+                    "description": "API key, if required",
+                    "default": "[not used]"
+                },
+                "context_limit": {
+                    "type": "number",
+                    "description": "Token context window size. This should be set to match the configuration at the server end. Used to manage chat completion call size, and detect truncation due to full context window",
+                    "default": 4096
+                }   
+            },
+            "required":["name"]
+        }
+    },
+    "required": ["model"]
+}
