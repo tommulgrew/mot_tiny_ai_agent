@@ -4,7 +4,7 @@ from pydantic import BaseModel
 from typing import Awaitable, Callable, Iterable, cast
 from config import ConfigModel
 from openai import AsyncClient
-from openai.types.chat import ChatCompletionMessageParam, ChatCompletionAssistantMessageParam, ChatCompletionSystemMessageParam, ChatCompletionMessageToolCallParam, ChatCompletionFunctionToolParam, ChatCompletionToolMessageParam
+from openai.types.chat import ChatCompletionMessageParam, ChatCompletionAssistantMessageParam, ChatCompletionSystemMessageParam, ChatCompletionMessageToolCallParam, ChatCompletionFunctionToolParam, ChatCompletionToolMessageParam, ChatCompletionUserMessageParam
 
 class AIToolError(Exception):
     """Raised when an error occurs calling a tool. Message will be passed back to the LLM as the tool response."""
@@ -35,8 +35,9 @@ class AIClient:
         )
 
     async def chat(self, 
-            system_message: ChatCompletionSystemMessageParam, 
-            messages: Iterable[ChatCompletionMessageParam], 
+            system_prompt: str, 
+            user_prompt: str,
+            message_history: Iterable[ChatCompletionMessageParam] = [],
             tools: Iterable[AITool] | None = None,
             strip_think: bool = True,
             output_callback: Callable[[str], None] | None = None) -> list[ChatCompletionMessageParam]:
@@ -45,8 +46,20 @@ class AIClient:
         # Collect new messages
         new_messages: list[ChatCompletionMessageParam] = []
 
-        # Create list so we can append new messages
-        message_list = [*messages]
+        # Create initial messages list
+        # Keep system message separate, so that old history messages can be 
+        # removed if necessary.
+        system_message = ChatCompletionSystemMessageParam(
+                role="system",
+                content=system_prompt
+            )
+        messages = [
+            *message_history,
+            ChatCompletionUserMessageParam(
+                role="user",
+                content=user_prompt
+            )
+        ]
 
         # Describe tools to chat completion
         completion_tools = [ make_chat_completion_tool(t) for t in tools ] if tools else []
@@ -60,7 +73,7 @@ class AIClient:
 
             # Call chat completion service
             response = await self.client.chat.completions.create(
-                messages=[ system_message, *message_list], 
+                messages=[ system_message, *messages], 
                 model=self.settings.name,
                 tools=completion_tools
             )
@@ -79,7 +92,7 @@ class AIClient:
                 content=content,
                 tool_calls=tool_call_params
             )
-            message_list.append(assistant_message)            
+            messages.append(assistant_message)            
 
             # Determine new message to return and callback content
             if strip_think and content != None:
@@ -132,7 +145,7 @@ class AIClient:
                     tool_call_id=tool_call.id,
                     content=tool_result
                 )
-                message_list.append(tool_message)
+                messages.append(tool_message)
                 new_messages.append(tool_message)
 
     async def call_tool(self, tool_call, tools: Iterable[AITool] | None) -> str:
