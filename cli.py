@@ -5,6 +5,7 @@ from prompt_toolkit import PromptSession
 from prompt_toolkit.patch_stdout import patch_stdout
 from ai_client import AIClient
 from openai.types.chat import ChatCompletionAssistantMessageParam, ChatCompletionMessageParam, ChatCompletionSystemMessageParam, ChatCompletionUserMessageParam
+from ai_tools.browser_tools import BrowserTools
 
 async def main():
 
@@ -22,6 +23,7 @@ async def main():
             role="system",
             content="You are a helpful, friendly chatbot named Alfred."
         )
+        tools=BrowserTools().make_tools()
 
         # Console REPL loop
         while True:
@@ -38,7 +40,11 @@ async def main():
             msgs.append(user_msg)
 
             # Call completions service
-            new_msgs = await client.chat(system_msg, msgs)
+            new_msgs = await client.chat(
+                system_message=system_msg, 
+                messages=msgs, 
+                tools=tools
+            )
             msgs.extend(new_msgs)
 
             # Trim message history
