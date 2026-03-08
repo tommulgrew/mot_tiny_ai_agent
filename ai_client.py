@@ -56,7 +56,7 @@ class AIClient:
             msg = choice.message
             content = msg.content
 
-            # Add assistant message to conversation
+            # Add assistant message to conversation (*with* thinking, so thought chain isn't broken across tool calls)
             assistant_message = ChatCompletionAssistantMessageParam(
                 role="assistant",
                 content=content,
@@ -64,9 +64,12 @@ class AIClient:
             )
             message_list.append(assistant_message)            
 
-            # Remove <think> blocks if necessary
+            # Determine new message to return and callback content
             if strip_think and content != None:
-                # Create a version of the assistant message with think blocks stripped out
+                # Create copy of assistant message with think blocks stripped out
+                # Track whether the think block is open/closed at the end of the message
+                # as think blocks can span multiple messages during tool calls
+                # (at least in Qwen3.5).
                 stripped_content, think_open = strip_think_block(content, think_open)
                 stripped_assistant_message = ChatCompletionAssistantMessageParam(
                     role="assistant",
