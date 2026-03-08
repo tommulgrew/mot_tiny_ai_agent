@@ -1,28 +1,13 @@
 import json
 from openai.types.chat.chat_completion_tool_param import FunctionDefinition
-from pydantic import BaseModel
-from typing import Awaitable, Callable, Iterable, cast
+from typing import Callable, Iterable, cast
+from ai_tools import AIToolError, AITools, AITool
 from config import ConfigModel
 from openai import AsyncClient
 from openai.types.chat import ChatCompletionMessageParam, ChatCompletionAssistantMessageParam, ChatCompletionSystemMessageParam, ChatCompletionMessageToolCallParam, ChatCompletionFunctionToolParam, ChatCompletionToolMessageParam, ChatCompletionUserMessageParam
 
-class AIToolError(Exception):
-    """Raised when an error occurs calling a tool. Message will be passed back to the LLM as the tool response."""
-
-class AIToolParam(BaseModel):
-    """Parameter definition for an AI tool"""
-    name: str
-    type: str
-    description: str
-    optional: bool = False
-
-class AITool(BaseModel):
-    """An AI tool, including definition and callback function"""
-    name: str
-    description: str
-    params: list[AIToolParam]
-    async_callback: Callable[..., Awaitable[str]]
-    single_use: bool = False
+class AIClientError(Exception):
+    """General AI chat completion client error"""
 
 class AIClient:
     """Basic client for OpenAI chat completions API, with tool callbacks"""
@@ -38,7 +23,7 @@ class AIClient:
             system_prompt: str, 
             user_prompt: str,
             message_history: Iterable[ChatCompletionMessageParam] = [],
-            tools: Iterable[AITool] | None = None,
+            tools: AITools | None = None,
             strip_think: bool = True,
             output_callback: Callable[[str], None] | None = None) -> list[ChatCompletionMessageParam]:
         """Call the chat completions API, resolve any tool calls and return the new messages generated"""
@@ -62,7 +47,11 @@ class AIClient:
         ]
 
         # Describe tools to chat completion
-        completion_tools = [ make_chat_completion_tool(t) for t in tools ] if tools else []
+        if tools:            
+            completion_tools = [ make_chat_completion_tool(t) for t in tools.tools ]
+            tools.clear_called_tools()
+        else:
+            completion_tools = []
 
         # Track whether we are in a think block.
         # (Think blocks can span multiple messages in Qwen3.5).
@@ -132,12 +121,21 @@ class AIClient:
                 return new_messages
 
             # Call tools
+            if not tools:
+                raise AIClientError("Received tool call when no tools are available")
+
             for tool_call in msg.tool_calls or []:
                 if tool_call.type != "function":
-                    raise AIToolError("Tool type must be 'function'")
+                    raise AIClientError("Tool type must be 'function'")
 
-                # Call the tool
-                tool_result = await self.call_tool(tool_call, tools)
+                # Parse JSON parameters
+                tool_args = json.loads(tool_call.function.arguments) if tool_call.function.arguments else {}
+
+                # Call tool
+                try:
+                    tool_result = await tools.call_tool(tool_call.function.name, tool_args)
+                except AIToolError as exc:
+                    tool_result = f"{exc}"
 
                 # Add tool result message
                 tool_message = ChatCompletionToolMessageParam(
@@ -147,25 +145,6 @@ class AIClient:
                 )
                 messages.append(tool_message)
                 new_messages.append(tool_message)
-
-    async def call_tool(self, tool_call, tools: Iterable[AITool] | None) -> str:
-
-        # Find tool
-        tool = next((tool for tool in tools or [] if tool.name == tool_call.function.name), None)
-        if tool is None:
-            raise AIToolError(f"Tool '{tool_call.function.name}' not found")
-
-        # Collect parameters
-        args_json = tool_call.function.arguments
-        args_dict = json.loads(args_json) if args_json else {}
-        params = [
-            args_dict[p.name] if not p.optional else args_dict.get(p.name)
-            for p in tool.params
-        ]
-
-        # Call tool callback
-        return await tool.async_callback(*params)
-
 
 def make_chat_completion_tool(tool: AITool) -> ChatCompletionFunctionToolParam:
     

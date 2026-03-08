@@ -4,7 +4,8 @@ from args import parse_main_args
 from prompt_toolkit import PromptSession
 from prompt_toolkit.patch_stdout import patch_stdout
 from ai_client import AIClient
-from ai_tools.browser_tools import BrowserTools
+from ai_tools import AITools
+from tools.browser_tools import BrowserTools
 
 async def main():
 
@@ -17,7 +18,8 @@ async def main():
         app = App(args)
 
         client = AIClient(app.config.model)
-        tools=BrowserTools().make_tools()
+        tools = AITools()
+        tools.add(BrowserTools().make_tools())
         message_history=[]
 
         # Console REPL loop
