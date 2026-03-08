@@ -43,17 +43,14 @@ async def main():
             new_msgs = await client.chat(
                 system_message=system_msg, 
                 messages=msgs, 
-                tools=tools
+                tools=tools,
+                output_callback=print
             )
             msgs.extend(new_msgs)
 
             # Trim message history
             while len(msgs) > 20:
                 msgs.remove(msgs[0])
-
-            # Display response
-            response: ChatCompletionMessageParam = msgs[-1]
-            print(response.get("content"))
 
             # app.user_input(user_input)
 

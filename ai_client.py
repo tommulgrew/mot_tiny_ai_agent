@@ -38,7 +38,8 @@ class AIClient:
             system_message: ChatCompletionSystemMessageParam, 
             messages: Iterable[ChatCompletionMessageParam], 
             tools: Iterable[AITool] | None = None,
-            strip_think: bool = True) -> list[ChatCompletionMessageParam]:
+            strip_think: bool = True,
+            output_callback: Callable[[str], None] | None = None) -> list[ChatCompletionMessageParam]:
         """Call the chat completions API, resolve any tool calls and return the new messages generated"""
 
         # Collect new messages
@@ -98,7 +99,20 @@ class AIClient:
                 new_messages.append(assistant_message)              # Return unmodified response
                 callback_content=content
 
-            # TODO: Display callback
+            # Pass current output to callback
+            if output_callback:
+                callback_content = (callback_content or "").strip()
+                
+                # Append any tool calls (just tool name)
+                if msg.tool_calls:
+                    tool_names = [tool_call.function.name for tool_call in msg.tool_calls if tool_call.type == "function"]
+                    if tool_names:
+                        tool_desc = f"[{','.join(tool_names)}]"
+                        callback_content = callback_content + "\n" + tool_desc if callback_content else tool_desc
+                
+                # Call callback (if any content to report)
+                if callback_content:
+                    output_callback(callback_content)
 
             # If not a tool call, we are finished
             if choice.finish_reason != 'tool_calls':
