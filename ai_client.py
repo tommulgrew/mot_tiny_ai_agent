@@ -118,6 +118,7 @@ class AIClient:
             if choice.finish_reason != 'tool_calls':
                 return new_messages
 
+            # Call tools
             for tool_call in msg.tool_calls or []:
                 if tool_call.type != "function":
                     raise AIToolError("Tool type must be 'function'")
