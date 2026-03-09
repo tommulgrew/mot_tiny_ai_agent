@@ -2,5 +2,12 @@
     "$schema": "config-schema.json",
     "model": {
         "name": "qwen/qwen3-8b"
+    },
+    "file_tools": {
+        "folders": [
+            { "alias": "ai_files", "path": "E:\\ai\\sandbox", "access": "rw" },
+            { "alias": "user_share", "path": "C:\\publicshare", "access": "ro" }
+        ],
+        "trash_path": "E:\\ai\\trash"
     }
 }

@@ -34,6 +34,43 @@
                 }   
             },
             "required":["name"]
+        },
+        "file_tools": {
+            "type": "object",
+            "additionalProperties": false,
+            "description": "File and folder AI tool calls",
+            "required": [ "folders", "trash_path" ],
+            "properties": {
+                "folders": {
+                    "type": "array",
+                    "description": "List of folders the agent can access, exposed to the LLM as aliases.",
+                    "minItems": 1,
+                    "items": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": ["alias", "path", "access"],
+                        "properties": {
+                            "alias": {
+                                "type": "string",
+                                "description": "The name the LLM uses to refer to this folder (e.g. 'notes')"
+                            },
+                            "path": {
+                                "type": "string",
+                                "description": "Absolute path to the folder on disk."
+                            },
+                            "access": {
+                                "type": "string",
+                                "enum": ["ro", "rw"],
+                                "description": "'ro' for read-only, 'rw' for read/write."
+                            }                            
+                        }
+                    }
+                },
+                "trash_path": {
+                    "type": "string",
+                    "description": "Absolute path to the 'trash' folder, where files are moved when the LLM 'deletes' them."
+                }
+            }
         }
     },
     "required": ["model"]

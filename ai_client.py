@@ -2,7 +2,7 @@ import json
 from openai.types.chat.chat_completion_tool_param import FunctionDefinition
 from typing import Callable, Iterable, cast
 from ai_tools import AIToolError, AITools, AITool
-from config import ConfigModel
+from config import ModelConfig
 from openai import AsyncClient
 from openai.types.chat import ChatCompletionMessageParam, ChatCompletionAssistantMessageParam, ChatCompletionSystemMessageParam, ChatCompletionMessageToolCallParam, ChatCompletionFunctionToolParam, ChatCompletionToolMessageParam, ChatCompletionUserMessageParam
 
@@ -12,7 +12,7 @@ class AIClientError(Exception):
 class AIClient:
     """Basic client for OpenAI chat completions API, with tool callbacks"""
     
-    def __init__(self, settings: ConfigModel):
+    def __init__(self, settings: ModelConfig):
         self.settings = settings
         self.client = AsyncClient(
             api_key=settings.api_key,
