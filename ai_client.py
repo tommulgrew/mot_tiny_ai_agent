@@ -135,7 +135,7 @@ class AIClient:
                 try:
                     tool_result = await tools.call_tool(tool_call.function.name, tool_args)
                 except AIToolError as exc:
-                    tool_result = f"{exc}"
+                    tool_result = f"ERROR: {exc}"
 
                 # Add tool result message
                 tool_message = ChatCompletionToolMessageParam(

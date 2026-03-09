@@ -41,7 +41,7 @@ class AITools:
 
         # Handle single use tools
         if tool.single_use and name in self.called_tools:
-            raise AIToolError(f"Tool cannot be called again this turn.")
+            raise AIToolError(f"The '{name}' tool cannot be called again this turn.")
 
         # Collect parameters
         params = [
