@@ -7,6 +7,7 @@ from ai_client import AIClient
 from ai_tools import AITools
 from tools.browser_tools import BrowserTools
 from tools.file_tools import FileTools
+from tools.speak_tools import SpeakTools
 
 async def main():
 
@@ -24,6 +25,7 @@ async def main():
         tools.add(BrowserTools().make_tools())
         if app.config.file_tools:
             tools.add(FileTools(app.config.file_tools).make_tools())
+        tools.add(SpeakTools().make_tools())
 
         message_history=[]
 
