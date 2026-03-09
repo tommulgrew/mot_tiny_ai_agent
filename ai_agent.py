@@ -4,14 +4,16 @@ from typing import Callable
 from pydantic import BaseModel
 from ai_client import AIClient
 from ai_tools import AITools
+from ai_memory import AIMemory
 
 class AIAgentPrompts(BaseModel):
     main: str           # Main agent system prompt
 
 class AIAgent:
     """A basic autonomous AI agent"""
-    def __init__(self, client: AIClient, tools: AITools | None, output_callback: Callable[[str], None] | None = None):
+    def __init__(self, client: AIClient, memory: AIMemory, tools: AITools | None, output_callback: Callable[[str], None] | None = None):
         self.client = client
+        self.memory = memory
         self.tools = tools
         self.output_callback = output_callback
         self.prompts = create_ai_prompts()
@@ -35,6 +37,10 @@ class AIAgent:
 
         # Add to history
         self.message_history.extend(new_messages)
+
+        # Record memories
+        new_message_text = self.client.flatten_messages(new_messages)
+        self.memory.create_memories(new_message_text)
 
     def _filter_output(self, output: str):
         if self.output_callback and output and output != "NO_OUTPUT":

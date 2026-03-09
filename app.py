@@ -1,5 +1,6 @@
 from typing import Any, Literal, Callable
 from openai import BaseModel
+from ai_memory import AIMemory
 from config import load_config
 import asyncio
 from ai_client import AIClient
@@ -27,8 +28,14 @@ class App:
 
         # Wire up agent
         client = AIClient(self.config.model)
+        memory = AIMemory()
         tools = self._create_ai_tools()
-        self.agent = AIAgent(client, tools, output_callback)
+        self.agent = AIAgent(
+            client=client, 
+            memory=memory, 
+            tools=tools, 
+            output_callback=output_callback
+        )
 
         # Create event queue
         self.event_queue = asyncio.Queue()
@@ -44,6 +51,7 @@ class App:
         self.event_queue.put_nowait(event)
 
     async def _process_queue(self):
+        """Main event queue loop"""
         while True:
             event: UserInputEvent | SystemEvent = await self.event_queue.get()
             

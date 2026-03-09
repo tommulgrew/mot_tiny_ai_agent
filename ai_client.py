@@ -28,23 +28,24 @@ class AIClient:
             output_callback: Callable[[str], None] | None = None) -> list[ChatCompletionMessageParam]:
         """Call the chat completions API, resolve any tool calls and return the new messages generated"""
 
-        # Collect new messages
-        new_messages: list[ChatCompletionMessageParam] = []
-
-        # Create initial messages list
-        # Keep system message separate, so that old history messages can be 
-        # removed if necessary.
+        # Create message objects
         system_message = ChatCompletionSystemMessageParam(
-                role="system",
-                content=system_prompt
-            )
+            role="system",
+            content=system_prompt
+        )
+        user_message = ChatCompletionUserMessageParam(
+            role="user",
+            content=user_prompt
+        )
+
+        # Working message list
         messages = [
             *message_history,
-            ChatCompletionUserMessageParam(
-                role="user",
-                content=user_prompt
-            )
+            user_message            
         ]
+
+        # New messages
+        new_messages: list[ChatCompletionMessageParam] = [ user_message ]
 
         # Describe tools to chat completion
         if tools:            
@@ -145,6 +146,9 @@ class AIClient:
                 )
                 messages.append(tool_message)
                 new_messages.append(tool_message)
+
+    def flatten_messages(self, messages: Iterable[ChatCompletionMessageParam]) -> str:
+        return "\n\n".join(f"[{m['role'].upper()}]:\n{m.get('content') or ''}" for m in messages)
 
 def make_chat_completion_tool(tool: AITool) -> ChatCompletionFunctionToolParam:
     
