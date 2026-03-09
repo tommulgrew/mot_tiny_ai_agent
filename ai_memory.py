@@ -7,4 +7,4 @@ class AIMemory:
     def retrieve(self, conversation: str) -> list[str]:
         """Retrieve memories based on snippet of conversation"""
         # TO DO
-        return [ "User's name is Tom" ]
+        return [ "Assistant's name is Alfred", "User's name is Tom" ]

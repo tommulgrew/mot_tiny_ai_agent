@@ -21,31 +21,37 @@ class AIClient:
 
     async def chat(self, 
             system_prompt: str, 
-            user_prompt: str,
+            user_prompt: str | list[str],
             message_history: Iterable[ChatCompletionMessageParam] = [],
             tools: AITools | None = None,
             strip_think: bool = True,
             output_callback: Callable[[str], None] | None = None) -> list[ChatCompletionMessageParam]:
         """Call the chat completions API, resolve any tool calls and return the new messages generated"""
 
+        # Normalise user_prompt into an array
+        user_prompts = [ user_prompt ] if isinstance(user_prompt, str) else user_prompt
+
         # Create message objects
         system_message = ChatCompletionSystemMessageParam(
             role="system",
             content=system_prompt
         )
-        user_message = ChatCompletionUserMessageParam(
-            role="user",
-            content=user_prompt
-        )
+        user_messages = [ 
+            ChatCompletionUserMessageParam(
+                role="user",
+                content=p
+            )
+            for p in user_prompts
+        ]
 
         # Working message list
         messages = [
             *message_history,
-            user_message            
+            *user_messages
         ]
 
         # New messages
-        new_messages: list[ChatCompletionMessageParam] = [ user_message ]
+        new_messages: list[ChatCompletionMessageParam] = [ *user_messages ]
 
         # Describe tools to chat completion
         if tools:            

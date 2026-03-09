@@ -26,10 +26,23 @@ class AIAgent:
         await self._process_event(json.dumps(data))
 
     async def _process_event(self, content: str):
+
+        # Retrieve related memories
+        memories = self.memory.retrieve(content)
+        if memories:
+            # Serialize the memories as JSON, to (hopefully) help the LLM 
+            # understand it is not user input.
+            memory_text = f"{{ relevant_memories: {json.dumps(memories)} }}"
+
+            # Insert a memories message immediately before the main user input
+            user_prompt = [ memory_text, content ]
+        else:
+            user_prompt = content
+
         # Call chat client
         new_messages = await self.client.chat(
             system_prompt=self.prompts.main,
-            user_prompt=content,
+            user_prompt=user_prompt,
             message_history=self.message_history,
             tools=self.tools,
             output_callback=self._filter_output
