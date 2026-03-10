@@ -1,3 +1,4 @@
+import asyncio
 import json
 from openai.types.chat.chat_completion_tool_param import FunctionDefinition
 from typing import Callable, Iterable, cast
@@ -18,6 +19,7 @@ class AIClient:
             api_key=settings.api_key,
             base_url=settings.url
         )
+        self.chat_api_lock = asyncio.Lock()
 
     async def chat(self, 
             system_prompt: str, 
@@ -68,11 +70,15 @@ class AIClient:
         while True:
 
             # Call chat completion service
-            response = await self.client.chat.completions.create(
-                messages=[ system_message, *messages], 
-                model=self.settings.name,
-                tools=completion_tools
-            )
+            # Use the lock to prevent concurrent calls from different tasks,
+            # as LM Studio will simply abandon the first call and start the 
+            # second.
+            async with self.chat_api_lock:
+                response = await self.client.chat.completions.create(
+                    messages=[ system_message, *messages], 
+                    model=self.settings.name,
+                    tools=completion_tools
+                )
 
             # Extract response message and content
             choice = response.choices[0]
