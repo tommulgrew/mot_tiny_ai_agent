@@ -1,3 +1,4 @@
+import logging
 import asyncio
 from app import App
 from args import parse_main_args
@@ -5,6 +6,12 @@ from prompt_toolkit import PromptSession
 from prompt_toolkit.patch_stdout import patch_stdout
 
 async def main():
+
+    logging.basicConfig(
+        filename="log.txt",
+        level=logging.DEBUG,
+        format="%(asctime)s %(levelname)s %(message)s"
+    )
 
     # Prompt toolkit session
     session = PromptSession()

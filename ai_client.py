@@ -1,3 +1,4 @@
+import logging
 import asyncio
 import json
 from openai.types.chat.chat_completion_tool_param import FunctionDefinition
@@ -6,6 +7,7 @@ from ai_tools import AIToolError, AITools, AITool
 from config import ModelConfig
 from openai import AsyncClient
 from openai.types.chat import ChatCompletionMessageParam, ChatCompletionAssistantMessageParam, ChatCompletionSystemMessageParam, ChatCompletionMessageToolCallParam, ChatCompletionFunctionToolParam, ChatCompletionToolMessageParam, ChatCompletionUserMessageParam
+from util import log_dump
 
 class AIClientError(Exception):
     """General AI chat completion client error"""
@@ -70,6 +72,8 @@ class AIClient:
         # Repeat until all tool calls resolved
         while True:
 
+            logging.debug("Chat API request: %s", log_dump([ system_message, *messages ]))            
+
             # Call chat completion service
             # Use the lock to prevent concurrent calls from different tasks,
             # as LM Studio will simply abandon the first call and start the 
@@ -91,12 +95,7 @@ class AIClient:
                 # Run *without* locking
                 response = await coroutine
 
-            async with self.chat_api_lock:
-                response = await self.client.chat.completions.create(
-                    messages=[ system_message, *messages], 
-                    model=self.settings.name,
-                    tools=completion_tools
-                )
+            logging.debug("Chat API response: %s", log_dump(response))            
 
             # Extract response message and content
             choice = response.choices[0]
