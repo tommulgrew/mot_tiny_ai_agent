@@ -1,5 +1,8 @@
 import asyncio
+from dataclasses import field
 import json
+import re
+import random
 from pathlib import Path
 from openai import BadRequestError
 from pydantic import BaseModel
@@ -14,6 +17,9 @@ class AIMemoryPrompts(BaseModel):
 class AISavedMemory(BaseModel):
     fact: str
     keywords: list[str]
+
+class AIMemoryFile(BaseModel):
+    memories: list[AISavedMemory] = field(default_factory=list)
 
 # TODO: 
 # - Log/report tool calls, and other LLM output somewhere
@@ -31,6 +37,9 @@ class AIMemory:
         self.tools = self._make_ai_tools()
         self.dirty = False                  # True if memories need to be saved
 
+        # Load memory file
+        self._load()
+
         # Create stemmer
         self.stemmer = Stemmer.Stemmer('english')
 
@@ -44,8 +53,17 @@ class AIMemory:
 
     def retrieve(self, conversation: str) -> list[str]:
         """Retrieve memories based on snippet of conversation"""
-        # TO DO
-        return [ "Assistant's name is Alfred", "User's name is Tom" ]
+        keywords = set(self.get_keywords(conversation))
+        memories = [ 
+            m.fact 
+            for m in self.memories 
+            if bool(keywords & set(m.keywords))     # Sets intersect
+        ]
+        random.shuffle(memories)
+        if len(memories) > 8:
+            memories = memories[:8]
+
+        return memories
 
     async def _process_queue(self):
         """Main task queue loop"""
@@ -94,21 +112,7 @@ class AIMemory:
 
     async def _save_memory_tool(self, memory: str, keywords: str) -> str:
         """save_memory tool call"""
-
-        # Convert commas to spaces. Will then split around whitespace.
-        # This also splits up multiple word "keywords"
-        keywords = keywords.replace(',', ' ').strip()
-
-        # Split and process keywords. Remove duplicates.
-        keyword_list = [
-            processed
-            for processed in (
-                self.process_keyword(kw) for kw in keywords.split()
-            )
-            if processed
-        ]
-        keyword_list = list(set(keyword_list))  # Remove duplicates
-
+        keyword_list = self.get_keywords(keywords)
         self.memories.append(
             AISavedMemory(
                 fact=memory,
@@ -118,13 +122,31 @@ class AIMemory:
         self.dirty = True
         return "Memory saved"
 
+    def get_keywords(self, text: str) -> list[str]:
+
+        # Strip out punctuation etc
+        text = re.sub(r"[^\w-]", " ", text)
+
+        # Process words
+        words = [self.process_keyword(w) for w in text.split() if w]
+
+        # Return distinct words
+        return list(set(words))
+
     def process_keyword(self, keyword: str) -> str:
         keyword = keyword.strip().lower()
         keyword = self.stemmer.stemWord(keyword)
         return keyword
 
-    def _save(self):        
-        json_text = json.dumps([memory.model_dump() for memory in self.memories], indent=2)
+    def _load(self):
+        if self.storage_path.exists():
+            with open(self.storage_path, encoding="utf-8") as f:
+                file = AIMemoryFile.model_validate_json(f.read())
+                self.memories = file.memories
+
+    def _save(self):
+        file = AIMemoryFile(memories=self.memories)
+        json_text = file.model_dump_json(indent=2)
         self.storage_path.write_text(json_text, encoding="utf-8")
         self.dirty = False
         
