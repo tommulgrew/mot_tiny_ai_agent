@@ -1,9 +1,9 @@
 import asyncio
 import json
-from dataclasses import asdict
 from pathlib import Path
 from openai import BadRequestError
 from pydantic import BaseModel
+import Stemmer
 from ai_client import AIClient
 from ai_tools import AITools, AITool, AIToolParam
 from config import MemoryConfig
@@ -30,6 +30,9 @@ class AIMemory:
         self.prompts = create_ai_prompts()        
         self.tools = self._make_ai_tools()
         self.dirty = False                  # True if memories need to be saved
+
+        # Create stemmer
+        self.stemmer = Stemmer.Stemmer('english')
 
         # Create task queue
         self.task_queue = asyncio.Queue()
@@ -91,14 +94,34 @@ class AIMemory:
 
     async def _save_memory_tool(self, memory: str, keywords: str) -> str:
         """save_memory tool call"""
+
+        # Convert commas to spaces. Will then split around whitespace.
+        # This also splits up multiple word "keywords"
+        keywords = keywords.replace(',', ' ').strip()
+
+        # Split and process keywords. Remove duplicates.
+        keyword_list = [
+            processed
+            for processed in (
+                self.process_keyword(kw) for kw in keywords.split()
+            )
+            if processed
+        ]
+        keyword_list = list(set(keyword_list))  # Remove duplicates
+
         self.memories.append(
             AISavedMemory(
                 fact=memory,
-                keywords=[ kw.strip().lower() for kw in keywords.split(',') ]
+                keywords=keyword_list
             )
         )
         self.dirty = True
         return "Memory saved"
+
+    def process_keyword(self, keyword: str) -> str:
+        keyword = keyword.strip().lower()
+        keyword = self.stemmer.stemWord(keyword)
+        return keyword
 
     def _save(self):        
         json_text = json.dumps([memory.model_dump() for memory in self.memories], indent=2)
