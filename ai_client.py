@@ -156,6 +156,13 @@ class AIClient:
     def flatten_messages(self, messages: Iterable[ChatCompletionMessageParam]) -> str:
         return "\n\n".join(f"[{m['role'].upper()}]:\n{m.get('content') or ''}" for m in messages)
 
+    def is_user_message(self, message: ChatCompletionMessageParam) -> bool:
+        return message['role'] == "user"
+
+    def get_message_content(self, message: ChatCompletionMessageParam) -> str:
+        content = message.get('content')
+        return content if isinstance(content, str) else ""
+
 def make_chat_completion_tool(tool: AITool) -> ChatCompletionFunctionToolParam:
     
     # Convert parameters to dictionary

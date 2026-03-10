@@ -28,7 +28,7 @@ class App:
 
         # Wire up agent
         client = AIClient(self.config.model)
-        memory = AIMemory()
+        memory = AIMemory(client)
         tools = self._create_ai_tools()
         self.agent = AIAgent(
             client=client, 

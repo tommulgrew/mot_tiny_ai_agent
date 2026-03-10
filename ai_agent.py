@@ -1,6 +1,7 @@
 import json
 from collections import deque
 from typing import Callable
+from openai.types.chat import ChatCompletionMessageParam
 from pydantic import BaseModel
 from ai_client import AIClient
 from ai_tools import AITools
@@ -52,12 +53,20 @@ class AIAgent:
         self.message_history.extend(new_messages)
 
         # Record memories
-        new_message_text = self.client.flatten_messages(new_messages)
+        # Exclude "relevant memories" message if present.
+        memory_msgs = new_messages[1:] if self._is_relevant_memories_msg(new_messages[0]) else new_messages
+        new_message_text = self.client.flatten_messages(memory_msgs)
         self.memory.create_memories(new_message_text)
 
     def _filter_output(self, output: str):
         if self.output_callback and output and output != "NO_OUTPUT":
             self.output_callback(output)
+
+    def _is_relevant_memories_msg(self, msg) -> bool:
+        return (
+            self.client.is_user_message(msg) and 
+            self.client.get_message_content(msg).strip().startswith("{ relevant_memories:")
+        )
 
 
 def create_ai_prompts() -> AIAgentPrompts:
