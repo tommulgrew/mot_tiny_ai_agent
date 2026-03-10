@@ -20,10 +20,14 @@ class FileToolsConfig(BaseModel):
     trash_path: str
     max_read_chars: int = 8192
 
+class MemoryConfig(BaseModel):
+    storage_path: str = "memory.json"
+
 class Config(BaseModel):
     """Main configuration"""
     model: ModelConfig                      # LLM model configuration
     file_tools: FileToolsConfig
+    memory: MemoryConfig
 
 def load_config(path: str) -> Config:
     with open(path, encoding="utf-8") as f:

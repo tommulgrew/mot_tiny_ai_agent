@@ -1,7 +1,12 @@
 import asyncio
+import json
+from dataclasses import asdict
+from pathlib import Path
+from openai import BadRequestError
 from pydantic import BaseModel
 from ai_client import AIClient
 from ai_tools import AITools, AITool, AIToolParam
+from config import MemoryConfig
 
 class AIMemoryPrompts(BaseModel):
     create_memories: str        # Create memories from conversation snippet
@@ -18,11 +23,13 @@ class AISavedMemory(BaseModel):
 class AIMemory:
     """Basic AI memory service, for extracting and retrieving memories during conversation"""
     
-    def __init__(self, client: AIClient):
+    def __init__(self, client: AIClient, config: MemoryConfig):
         self.client = client
+        self.storage_path = Path(config.storage_path)
         self.memories: list[AISavedMemory] = []
         self.prompts = create_ai_prompts()        
         self.tools = self._make_ai_tools()
+        self.dirty = False                  # True if memories need to be saved
 
         # Create task queue
         self.task_queue = asyncio.Queue()
@@ -53,11 +60,20 @@ class AIMemory:
     async def _create_memories(self, conversation: str):
         """Create memories"""
         # Call chat client. Memories will be created via tool calls
-        response = await self.client.chat(
-            system_prompt=self.prompts.create_memories,
-            user_prompt=conversation,
-            tools=self.tools
-        )
+        try:
+            response = await self.client.chat(
+                system_prompt=self.prompts.create_memories,
+                user_prompt=conversation,
+                tools=self.tools
+            )
+        except BadRequestError as e:
+            if "Context size has been exceeded" not in str(e):
+                raise
+            # Otherwise ignore context size exceeded. This is non-critical 
+            # background process. Often a few memories will have been written
+            # anyway, so just carry on and save them.
+        if self.dirty:
+            self._save()
 
     def _make_ai_tools(self) -> AITools:
         tools = AITools()
@@ -78,11 +94,17 @@ class AIMemory:
         self.memories.append(
             AISavedMemory(
                 fact=memory,
-                keywords=[ kw.strip().lower() for kw in keywords.split() ]
+                keywords=[ kw.strip().lower() for kw in keywords.split(',') ]
             )
         )
+        self.dirty = True
         return "Memory saved"
 
+    def _save(self):        
+        json_text = json.dumps([memory.model_dump() for memory in self.memories], indent=2)
+        self.storage_path.write_text(json_text, encoding="utf-8")
+        self.dirty = False
+        
 
 def create_ai_prompts() -> AIMemoryPrompts:
     return AIMemoryPrompts(
@@ -105,6 +127,10 @@ Memories: [ { memory: "User's name is John", keywords: "user,name,john" } ]
 
 "[USER]: Can you open netflix for me. The URL is: https://www.netflix.com/browse
 Memories: [ { memory: "The Netflix URL is https://www.netflix.com/browse", keywords: "netflix,movie" } ]
+
+Important:
+- Sections that start with [USER] are input from the user.
+- Sections that start with [ASSISTANT] are the AI chatbot's response.
 
 Once you have finished, respond with: DONE
 """)        

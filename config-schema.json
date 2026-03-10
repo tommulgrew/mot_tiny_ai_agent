@@ -71,6 +71,16 @@
                     "description": "Absolute path to the 'trash' folder, where files are moved when the LLM 'deletes' them."
                 }
             }
+        },
+        "memory": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+                "storage_path": {
+                    "type": "string",
+                    "description": "Path and filename to memory JSON file"
+                }
+            }
         }
     },
     "required": ["model"]

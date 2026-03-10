@@ -9,5 +9,8 @@
             { "alias": "user_share", "path": "C:\\publicshare", "access": "ro" }
         ],
         "trash_path": "E:\\ai\\trash"
+    },
+    "memory": {
+        "storage_path": "memory.json"
     }
 }
