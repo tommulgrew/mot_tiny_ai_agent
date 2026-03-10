@@ -85,7 +85,8 @@ class AIMemory:
             response = await self.client.chat(
                 system_prompt=self.prompts.create_memories,
                 user_prompt=conversation,
-                tools=self.tools
+                tools=self.tools,
+                lock_service=False      # Allow agent to interrupt chat API calls
             )
         except BadRequestError as e:
             if "Context size has been exceeded" not in str(e):

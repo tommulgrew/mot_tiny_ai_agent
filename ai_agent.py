@@ -53,10 +53,9 @@ class AIAgent:
         self.message_history.extend(new_messages)
 
         # Record memories
-        # Exclude "relevant memories" message if present.
-        memory_msgs = new_messages[1:] if self._is_relevant_memories_msg(new_messages[0]) else new_messages
-        new_message_text = self.client.flatten_messages(memory_msgs)
-        self.memory.create_memories(new_message_text)
+        # Just use user input, not assistant replies, otherwise LLM can get 
+        # confused about who said what.
+        self.memory.create_memories(f"[USER]\n{content}")
 
     def _filter_output(self, output: str):
         if self.output_callback and output and output != "NO_OUTPUT":
