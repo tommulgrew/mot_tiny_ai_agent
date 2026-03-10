@@ -1,9 +1,10 @@
 import asyncio
 from dataclasses import field
-import json
 import re
 import random
+from datetime import datetime
 from pathlib import Path
+from typing import Literal
 from openai import BadRequestError
 from pydantic import BaseModel
 import Stemmer
@@ -13,13 +14,27 @@ from config import MemoryConfig
 
 class AIMemoryPrompts(BaseModel):
     create_memories: str        # Create memories from conversation snippet
+    classify_memories: str      # Detect duplicate, conflicting and expired memories
 
 class AISavedMemory(BaseModel):
+    id: int
     fact: str
     keywords: list[str]
+    when_created: datetime
+
+class CreateMemoriesTask(BaseModel):
+    type: Literal["create"]
+    conversation: str
+
+class ClassifyMemoriesTask(BaseModel):
+    type: Literal["classify"]
+    conversation: str
+    keywords: set[str]
+    memories: list[AISavedMemory]
 
 class AIMemoryFile(BaseModel):
     memories: list[AISavedMemory] = field(default_factory=list)
+    id_generator: int
 
 # TODO: 
 # - Log/report tool calls, and other LLM output somewhere
@@ -32,6 +47,7 @@ class AIMemory:
     def __init__(self, client: AIClient, config: MemoryConfig):
         self.client = client
         self.storage_path = Path(config.storage_path)
+        self.id_generator = 0
         self.memories: list[AISavedMemory] = []
         self.prompts = create_ai_prompts()        
         self.tools = self._make_ai_tools()
@@ -49,30 +65,38 @@ class AIMemory:
 
     def create_memories(self, conversation: str):
         """Create memories from a snippet of conversation"""
-        self.task_queue.put_nowait(conversation)
+        self.task_queue.put_nowait(CreateMemoriesTask(type="create", conversation=conversation))
 
     def retrieve(self, conversation: str) -> list[str]:
         """Retrieve memories based on snippet of conversation"""
         keywords = set(self.get_keywords(conversation))
         memories = [ 
-            m.fact 
+            m
             for m in self.memories 
             if bool(keywords & set(m.keywords))     # Sets intersect
         ]
+
+        # Queue a task to classify memories
+        self.task_queue.put_nowait(ClassifyMemoriesTask(type="classify", memories=memories, keywords=keywords, conversation=conversation))
+
         random.shuffle(memories)
         if len(memories) > 8:
             memories = memories[:8]
 
-        return memories
+        # Return facts
+        return [m.fact for m in memories]
 
     async def _process_queue(self):
         """Main task queue loop"""
         while True:
-            conversation: str = await self.task_queue.get()
+            task: CreateMemoriesTask | ClassifyMemoriesTask = await self.task_queue.get()
 
             try:
-                # Process conversation
-                await self._create_memories(conversation)
+                # Perform task
+                if task.type == "create":
+                    await self._create_memories(task.conversation)
+                elif task.type == "classify":
+                    await self._classify_memories(task.memories, task.conversation, task.keywords)
 
             finally:
                 # Task done
@@ -96,6 +120,10 @@ class AIMemory:
         if self.dirty:
             self._save()
 
+    async def _classify_memories(self, memories: list[AISavedMemory], convesation: str, keywords: set[str]):
+        """Classify memories for relevance, redundancy and correctness"""
+        # TO DO
+
     def _make_ai_tools(self) -> AITools:
         tools = AITools()
         save_memory_tool = AITool(
@@ -115,6 +143,8 @@ class AIMemory:
         keyword_list = self.get_keywords(keywords)
         self.memories.append(
             AISavedMemory(
+                when_created=datetime.now(),
+                id=self._generate_id(),
                 fact=memory,
                 keywords=keyword_list
             )
@@ -138,14 +168,19 @@ class AIMemory:
         keyword = self.stemmer.stemWord(keyword)
         return keyword
 
+    def _generate_id(self) -> int:
+        self.id_generator += 1
+        return self.id_generator
+
     def _load(self):
         if self.storage_path.exists():
             with open(self.storage_path, encoding="utf-8") as f:
                 file = AIMemoryFile.model_validate_json(f.read())
                 self.memories = file.memories
+                self.id_generator = file.id_generator
 
     def _save(self):
-        file = AIMemoryFile(memories=self.memories)
+        file = AIMemoryFile(memories=self.memories, id_generator=self.id_generator)
         json_text = file.model_dump_json(indent=2)
         self.storage_path.write_text(json_text, encoding="utf-8")
         self.dirty = False
@@ -176,4 +211,36 @@ Important:
 - Sections that start with [ASSISTANT] are the AI chatbot's response.
 
 Once you have finished, respond with: DONE
+""",
+        classify_memories="""\
+You are a memory service for an AI chatbot.
+
+Process the supplied memories and classify each one as either:
+"contradicts" - Contradicts another memory
+"duplicate" - Duplicate of another memory
+"relevant" - Relevant to the conversation
+"not_relevant" - Not relevant to the conversation
+
+Use the supplied conversation snippet to determine relevance.
+
+Return the results as JSON in the following format:
+
+[
+    {{ "id": 123, "class": "contradicts", "otherid": 157 }},
+    {{ "id": 157, "class": "contradicts", "otherid": 123 }},
+    {{ "id": 45, "class": "duplicate", "otherid": 371 }},
+    {{ "id": 371, "class": "duplicate", "otherid": 45 }},
+    {{ "id": 72, "class": "not_relevant" }},
+    {{ "id": 94, "class": "relevant" }},
+    {{ "id": 32, "class": "relevant" }},
+    {{ "id": 33, "class": "not_relevant" }}
+]
+
+Note: "otherid" is required for contradictions and duplicates.
+
+Respond only with JSON in the format described. No preamble or explanation.
 """)        
+
+
+# Add option once memory age is tracked
+# "expired" - Memory is no longer relevant

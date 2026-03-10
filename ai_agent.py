@@ -58,7 +58,7 @@ class AIAgent:
         self.memory.create_memories(f"[USER]\n{content}")
 
     def _filter_output(self, output: str):
-        if self.output_callback and output and output != "NO_OUTPUT":
+        if self.output_callback and output: # and output != "NO_OUTPUT":
             self.output_callback(output)
 
     def _is_relevant_memories_msg(self, msg) -> bool:
