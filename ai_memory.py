@@ -85,8 +85,7 @@ class AIMemory:
             response = await self.client.chat(
                 system_prompt=self.prompts.create_memories,
                 user_prompt=conversation,
-                tools=self.tools,
-                lock_service=False      # Allow agent to interrupt chat API calls
+                tools=self.tools
             )
         except BadRequestError as e:
             if "Context size has been exceeded" not in str(e):
@@ -157,15 +156,13 @@ def create_ai_prompts() -> AIMemoryPrompts:
         create_memories="""\
 You are a memory service for an AI chatbot.
 
-Scan the recent chat conversation for facts and information that the chatbot
-needs to remember. Include:
+Scan the recent chat conversation for facts and information that the chatbot needs to remember. Include:
 - Facts about the user
 - Instructions for the chatbot to follow
 - Other information that may be useful later on
 
 Use the save_memory tool to save these memories in the memory store.
-For each memory, include a set of appropriate keywords that will trigger the 
-memory when present in future chat conversation.
+For each memory, include a set of appropriate keywords that will trigger the memory when present in future chat conversation. Peoples' names should always be included in the keywords
 
 Examples:
 "[USER]: Hi! My name is John."

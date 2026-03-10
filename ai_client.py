@@ -21,7 +21,6 @@ class AIClient:
             api_key=settings.api_key,
             base_url=settings.url
         )
-        self.chat_api_lock = asyncio.Lock()
 
     async def chat(self, 
             system_prompt: str, 
@@ -29,7 +28,6 @@ class AIClient:
             message_history: Iterable[ChatCompletionMessageParam] = [],
             tools: AITools | None = None,
             strip_think: bool = True,
-            lock_service: bool = True,
             output_callback: Callable[[str], None] | None = None) -> list[ChatCompletionMessageParam]:
         """Call the chat completions API, resolve any tool calls and return the new messages generated"""
 
@@ -75,25 +73,11 @@ class AIClient:
             logging.debug("Chat API request: %s", log_dump([ system_message, *messages ]))            
 
             # Call chat completion service
-            # Use the lock to prevent concurrent calls from different tasks,
-            # as LM Studio will simply abandon the first call and start the 
-            # second.
-            coroutine = self.client.chat.completions.create(
+            response = await self.client.chat.completions.create(
                     messages=[ system_message, *messages], 
                     model=self.settings.name,
                     tools=completion_tools
                 )
-
-            if lock_service:
-                # Run inside lock
-                async with self.chat_api_lock:
-                    response = await coroutine
-            else:
-                # Wait until lock is free
-                while self.chat_api_lock.locked():
-                    await asyncio.sleep(1)
-                # Run *without* locking
-                response = await coroutine
 
             logging.debug("Chat API response: %s", log_dump(response))            
 
