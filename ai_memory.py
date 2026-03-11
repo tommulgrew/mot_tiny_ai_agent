@@ -1,6 +1,5 @@
 import logging
 import asyncio
-import json
 from dataclasses import field
 import re
 import random
@@ -17,7 +16,7 @@ from config import MemoryConfig
 
 class AIMemoryPrompts(BaseModel):
     create_memories: str        # Create memories from conversation snippet
-    delete_memories: str        # Delete incorrect, duplicate or no-longer required memories
+    housekeep_memories: str     # Detect duplicate and conflicting memories
 
 class AISavedMemory(BaseModel):
     id: int
@@ -29,24 +28,26 @@ class CreateMemoriesTask(BaseModel):
     type: Literal["create"]
     conversation: str
 
-class ClassifyMemoriesTask(BaseModel):
-    type: Literal["classify"]
-    conversation: str
-    keywords: set[str]
+class MemoryHousekeepingTask(BaseModel):
+    type: Literal["housekeeping"]
     memories: list[AISavedMemory]
 
 class AIMemoryFile(BaseModel):
     memories: list[AISavedMemory] = field(default_factory=list)
     id_generator: int
 
-class DeletableMemory(BaseModel):
+class HousekeepingMemory(BaseModel):
+    """Memory representation to pass to the AI model for housekeeping tasks"""
     id: int
     fact: str
     when_created: str            # Description of when created
 
-class DeletableMemories(BaseModel):
-    memories: list[DeletableMemory]
-    conversation_snippet: str   
+class HousekeepingMemories(BaseModel):
+    memories: list[HousekeepingMemory]
+
+class MemoryHousekeepingAction(BaseModel):
+    type: Literal["duplicate", "conflict"]
+    memories: list[AISavedMemory]
 
 # TODO: 
 # - Log/report tool calls, and other LLM output somewhere
@@ -61,9 +62,10 @@ class AIMemory:
         self.storage_path = Path(config.storage_path)
         self.id_generator = 0
         self.memories: list[AISavedMemory] = []
+        self.housekeeping_actions: list[MemoryHousekeepingAction] = []
         self.prompts = create_ai_prompts()        
         self.save_tools = self._make_save_memory_tools()
-        self.delete_tools = self._make_delete_memory_tools()
+        self.housekeeping_tools = self._make_housekeeping_tools()
         self.dirty = False                  # True if memories need to be saved
 
         # Load memory file
@@ -89,8 +91,8 @@ class AIMemory:
             if bool(keywords & set(m.keywords))     # Sets intersect
         ]
 
-        # Queue a task to classify memories
-        self.task_queue.put_nowait(ClassifyMemoriesTask(type="classify", memories=memories, keywords=keywords, conversation=conversation))
+        # Queue a memory housekeeping task
+        self.task_queue.put_nowait(MemoryHousekeepingTask(type="housekeeping", memories=memories))
 
         random.shuffle(memories)
         if len(memories) > 8:
@@ -102,14 +104,14 @@ class AIMemory:
     async def _process_queue(self):
         """Main task queue loop"""
         while True:
-            task: CreateMemoriesTask | ClassifyMemoriesTask = await self.task_queue.get()
+            task: CreateMemoriesTask | MemoryHousekeepingTask = await self.task_queue.get()
 
             try:
                 # Perform task
                 if task.type == "create":
                     await self._create_memories(task.conversation)
-                elif task.type == "classify":
-                    await self._classify_memories(task.memories, task.conversation, task.keywords)
+                elif task.type == "housekeeping":
+                    await self._housekeep_memories(task.memories)
 
             finally:
                 # Task done
@@ -139,32 +141,33 @@ class AIMemory:
             tools=self.save_tools
         )
 
-    async def _classify_memories(self, memories: list[AISavedMemory], conversation: str, keywords: set[str]):
-        """Classify memories for relevance, redundancy and correctness"""
-
-        # Sort newer memories first
-        memories_by_age = sorted(memories, key=lambda x: x.when_created, reverse=True)
+    async def _housekeep_memories(self, memories: list[AISavedMemory]):
+        """Detect and resolve memory conflicts and duplicates"""
 
         # Convert to JSON
-        deletable = DeletableMemories(
+        housekeeping = HousekeepingMemories(
             memories=[
-                DeletableMemory(
+                HousekeepingMemory(
                     id=m.id, 
                     fact=m.fact,
                     when_created=humanize.naturaltime(datetime.now() - m.when_created)
                 ) 
-                for m in memories_by_age
-            ],
-            conversation_snippet=conversation
+                for m in memories
+            ]
         )
-        deletable_json = deletable.model_dump_json()
+        housekeeping_json = housekeeping.model_dump_json()
 
-        # Delete memories
+        # Detect duplicate and conflicting memories
+        self.housekeeping_actions = []
         await self._do_chat_tool_operation(
-            system_prompt=self.prompts.delete_memories,
-            user_prompt=deletable_json,
-            tools=self.delete_tools
+            system_prompt=self.prompts.housekeep_memories,
+            user_prompt=housekeeping_json,
+            tools=self.housekeeping_tools
         )
+
+        # Resolve reported duplicates and conflicts
+        # TO DO
+        logging.info(f"{len(self.housekeeping_actions)} housekeeping actions found")
 
     def _make_save_memory_tools(self) -> AITools:
         tools = AITools()
@@ -180,17 +183,27 @@ class AIMemory:
         tools.add([ save_memory_tool ])
         return tools
 
-    def _make_delete_memory_tools(self) -> AITools:
+    def _make_housekeeping_tools(self) -> AITools:
         tools = AITools()
-        delete_memory_tool = AITool(
-            name="delete_memory",
-            description="Delete a memory from the memory store",
+        report_duplicate_tool = AITool(
+            name="report_duplicate",
+            description="Report two memories that are duplicated of each other",
             params=[
-                AIToolParam(name="id", type="number", description="The memory's unique ID number")
+                AIToolParam(name="id1", type="number", description="The first duplicate memory's unique ID number"),
+                AIToolParam(name="id2", type="number", description="The second duplicate memory's unique ID number")
             ],
-            async_callback=self._delete_memory_tool
+            async_callback=self._report_duplicate_tool
         )
-        tools.add([ delete_memory_tool ])
+        report_conflict_tool = AITool(
+            name="report_conflict",
+            description="Report two memories that conflict with each other",
+            params=[
+                AIToolParam(name="id1", type="number", description="The first conflicting memory's unique ID number"),
+                AIToolParam(name="id2", type="number", description="The second conflicting memory's unique ID number")
+            ],
+            async_callback=self._report_conflict_tool
+        )
+        tools.add([ report_duplicate_tool, report_conflict_tool ])
         return tools
 
     async def _save_memory_tool(self, memory: str, keywords: str) -> str:
@@ -205,17 +218,43 @@ class AIMemory:
             )
         )
         self.dirty = True
+        logging.info(f"Saved memory: {memory}")
         return "Memory saved"
 
-    async def _delete_memory_tool(self, id: int) -> str:
-        """delete_memory tool call"""
-        memory = next((m for m in self.memories if m.id == id), None)
-        if memory:
-            self.memories.remove(memory)
-            self.dirty = True
-            return f"Memory {id} deleted"
-        else:
-            return f"ERROR: Memory {id} not found"
+    def _get_memory_by_id(self, id: int) -> AISavedMemory | None:
+        return next((m for m in self.memories if m.id == id), None)
+
+    async def _do_housekeeping_action(self, type: Literal["duplicate", "conflict"], id1: int, id2: int) -> str:
+
+        # Find memories
+        memory1 = self._get_memory_by_id(id1)
+        if not memory1:
+            return f"ERROR: Memory {id1} not found"
+        memory2 = self._get_memory_by_id(id2)
+        if not memory2:
+            return f"ERROR: Memory {id2} not found"
+
+        # Check for existing action
+        existing_action = next((
+            a 
+            for a in self.housekeeping_actions 
+            if a.type == type and memory1 in a.memories and memory2 in a.memories
+        ), None)
+        if existing_action:
+            return f"ERROR: {type} has already been reported"
+
+        # Add housekeeping action
+        self.housekeeping_actions.append(MemoryHousekeepingAction(type=type, memories=[memory1, memory2]))
+        logging.info(f"Found {type} memories: {memory1.fact}({memory1.id}),{memory2.fact}({memory2.id})")
+        return f"{type} reported succesfully"
+
+    async def _report_duplicate_tool(self, id1: int, id2: int) -> str:
+        """Report duplicate memories to be merged"""
+        return await self._do_housekeeping_action("duplicate", id1, id2)
+
+    async def _report_conflict_tool(self, id1: int, id2: int) -> str:
+        """Report conflicting memories to be resolved"""
+        return await self._do_housekeeping_action("conflict", id1, id2)
 
     def get_keywords(self, text: str) -> list[str]:
 
@@ -277,23 +316,24 @@ Important:
 
 Once you have finished, respond with: DONE
 """,
-        delete_memories="""\
+        housekeep_memories="""\
 You are a memory service for an AI chatbot.
 
-Consider the list of memories in relation to each other and to the conversation
-snippet, to determine which memories should be deleted, using the "delete_memory" tool.
+Examine the provided memories and check whether:
 
-Examine each memory *in order*. Evaluate:
-1. Does information in the conversation snippet *specifically* contradict the memory? Note: It's okay if the snippet does not mention the memory - the memory could be from an earlier part of the conversation.
-2. Does the memory contradict a *previous* memory in the list?
-3. Is the memory a duplicate of a *previous* memory in the list?
-4. Is the memory no longer relevant or useful?
+1) Any two memories contradict each other. I.e. they *cannot* both be true. 
 
-If the answer to any of the questions is yes, then delete the memory.
+Example 1.a: "User's name is Bob" conflicts with "User's name is Mary".
+Example 1.b: "Bob likes cats" conflicts with "Bob can't stand cats"
+
+Use the report_conflict tool to report any pairs of conflicting memories (if any).
+
+2) Any two memories that are duplicates of each other. I.e. they both state the *same* thing.
+
+Example 2.a: "User's name is George" is a duplicate of "The user prefers to be called George"
+Example 2.b: "George likes programming" is a duplicate of "George's hobbies include programming"
+
+Use the report_duplicate tool to report any pairs of duplicate memories (if any).
 
 Once you have finished, respond with: DONE
 """)        
-
-
-# Add option once memory age is tracked
-# "expired" - Memory is no longer relevant
