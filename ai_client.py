@@ -1,5 +1,4 @@
 import logging
-import asyncio
 import json
 from openai.types.chat.chat_completion_tool_param import FunctionDefinition
 from typing import Callable, Iterable, cast

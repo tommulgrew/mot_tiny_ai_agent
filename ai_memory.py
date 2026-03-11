@@ -1,4 +1,6 @@
+import logging
 import asyncio
+import json
 from dataclasses import field
 import re
 import random
@@ -6,15 +8,16 @@ from datetime import datetime
 from pathlib import Path
 from typing import Literal
 from openai import BadRequestError
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, ValidationError
 import Stemmer
+import humanize
 from ai_client import AIClient
 from ai_tools import AITools, AITool, AIToolParam
 from config import MemoryConfig
 
 class AIMemoryPrompts(BaseModel):
     create_memories: str        # Create memories from conversation snippet
-    classify_memories: str      # Detect duplicate, conflicting and expired memories
+    delete_memories: str        # Delete incorrect, duplicate or no-longer required memories
 
 class AISavedMemory(BaseModel):
     id: int
@@ -36,6 +39,15 @@ class AIMemoryFile(BaseModel):
     memories: list[AISavedMemory] = field(default_factory=list)
     id_generator: int
 
+class DeletableMemory(BaseModel):
+    id: int
+    fact: str
+    when_created: str            # Description of when created
+
+class DeletableMemories(BaseModel):
+    memories: list[DeletableMemory]
+    conversation_snippet: str   
+
 # TODO: 
 # - Log/report tool calls, and other LLM output somewhere
 # - Save/load memory to file
@@ -50,7 +62,8 @@ class AIMemory:
         self.id_generator = 0
         self.memories: list[AISavedMemory] = []
         self.prompts = create_ai_prompts()        
-        self.tools = self._make_ai_tools()
+        self.save_tools = self._make_save_memory_tools()
+        self.delete_tools = self._make_delete_memory_tools()
         self.dirty = False                  # True if memories need to be saved
 
         # Load memory file
@@ -102,14 +115,12 @@ class AIMemory:
                 # Task done
                 self.task_queue.task_done()
 
-    async def _create_memories(self, conversation: str):
-        """Create memories"""
-        # Call chat client. Memories will be created via tool calls
+    async def _do_chat_tool_operation(self, system_prompt: str, user_prompt: str, tools: AITools):
         try:
             response = await self.client.chat(
-                system_prompt=self.prompts.create_memories,
-                user_prompt=conversation,
-                tools=self.tools
+                system_prompt=system_prompt,
+                user_prompt=user_prompt,
+                tools=tools
             )
         except BadRequestError as e:
             if "Context size has been exceeded" not in str(e):
@@ -120,11 +131,42 @@ class AIMemory:
         if self.dirty:
             self._save()
 
-    async def _classify_memories(self, memories: list[AISavedMemory], convesation: str, keywords: set[str]):
-        """Classify memories for relevance, redundancy and correctness"""
-        # TO DO
+    async def _create_memories(self, conversation: str):
+        """Create memories"""
+        await self._do_chat_tool_operation(
+            system_prompt=self.prompts.create_memories, 
+            user_prompt=conversation,
+            tools=self.save_tools
+        )
 
-    def _make_ai_tools(self) -> AITools:
+    async def _classify_memories(self, memories: list[AISavedMemory], conversation: str, keywords: set[str]):
+        """Classify memories for relevance, redundancy and correctness"""
+
+        # Sort newer memories first
+        memories_by_age = sorted(memories, key=lambda x: x.when_created, reverse=True)
+
+        # Convert to JSON
+        deletable = DeletableMemories(
+            memories=[
+                DeletableMemory(
+                    id=m.id, 
+                    fact=m.fact,
+                    when_created=humanize.naturaltime(datetime.now() - m.when_created)
+                ) 
+                for m in memories_by_age
+            ],
+            conversation_snippet=conversation
+        )
+        deletable_json = deletable.model_dump_json()
+
+        # Delete memories
+        await self._do_chat_tool_operation(
+            system_prompt=self.prompts.delete_memories,
+            user_prompt=deletable_json,
+            tools=self.delete_tools
+        )
+
+    def _make_save_memory_tools(self) -> AITools:
         tools = AITools()
         save_memory_tool = AITool(
             name="save_memory",
@@ -136,6 +178,19 @@ class AIMemory:
             async_callback=self._save_memory_tool
         )
         tools.add([ save_memory_tool ])
+        return tools
+
+    def _make_delete_memory_tools(self) -> AITools:
+        tools = AITools()
+        delete_memory_tool = AITool(
+            name="delete_memory",
+            description="Delete a memory from the memory store",
+            params=[
+                AIToolParam(name="id", type="number", description="The memory's unique ID number")
+            ],
+            async_callback=self._delete_memory_tool
+        )
+        tools.add([ delete_memory_tool ])
         return tools
 
     async def _save_memory_tool(self, memory: str, keywords: str) -> str:
@@ -151,6 +206,16 @@ class AIMemory:
         )
         self.dirty = True
         return "Memory saved"
+
+    async def _delete_memory_tool(self, id: int) -> str:
+        """delete_memory tool call"""
+        memory = next((m for m in self.memories if m.id == id), None)
+        if memory:
+            self.memories.remove(memory)
+            self.dirty = True
+            return f"Memory {id} deleted"
+        else:
+            return f"ERROR: Memory {id} not found"
 
     def get_keywords(self, text: str) -> list[str]:
 
@@ -212,33 +277,21 @@ Important:
 
 Once you have finished, respond with: DONE
 """,
-        classify_memories="""\
+        delete_memories="""\
 You are a memory service for an AI chatbot.
 
-Process the supplied memories and classify each one as either:
-"contradicts" - Contradicts another memory
-"duplicate" - Duplicate of another memory
-"relevant" - Relevant to the conversation
-"not_relevant" - Not relevant to the conversation
+Consider the list of memories in relation to each other and to the conversation
+snippet, to determine which memories should be deleted, using the "delete_memory" tool.
 
-Use the supplied conversation snippet to determine relevance.
+Examine each memory *in order*. Evaluate:
+1. Does information in the conversation snippet *specifically* contradict the memory? Note: It's okay if the snippet does not mention the memory - the memory could be from an earlier part of the conversation.
+2. Does the memory contradict a *previous* memory in the list?
+3. Is the memory a duplicate of a *previous* memory in the list?
+4. Is the memory no longer relevant or useful?
 
-Return the results as JSON in the following format:
+If the answer to any of the questions is yes, then delete the memory.
 
-[
-    {{ "id": 123, "class": "contradicts", "otherid": 157 }},
-    {{ "id": 157, "class": "contradicts", "otherid": 123 }},
-    {{ "id": 45, "class": "duplicate", "otherid": 371 }},
-    {{ "id": 371, "class": "duplicate", "otherid": 45 }},
-    {{ "id": 72, "class": "not_relevant" }},
-    {{ "id": 94, "class": "relevant" }},
-    {{ "id": 32, "class": "relevant" }},
-    {{ "id": 33, "class": "not_relevant" }}
-]
-
-Note: "otherid" is required for contradictions and duplicates.
-
-Respond only with JSON in the format described. No preamble or explanation.
+Once you have finished, respond with: DONE
 """)        
 
 

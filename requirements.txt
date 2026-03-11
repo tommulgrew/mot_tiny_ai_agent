@@ -3,3 +3,4 @@ prompt_toolkit
 pydantic
 pyttsx3
 pystemmer
+humanize

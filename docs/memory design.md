@@ -36,3 +36,8 @@ Memory service design
     - Delete expired memories
     - Count keyword hits and misses
 
+
+### TO DO:
+
+[ ] - Include previous assistant response in memory lookup.
+[ ] - Memory service seems determined to delete memories!
