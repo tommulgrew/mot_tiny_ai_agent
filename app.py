@@ -26,6 +26,7 @@ class App:
         
         # Parse configuration
         self.config = load_config(args.config)
+        self.output_callback = output_callback
 
         # Wire up agent
         client = AIClient(self.config.model)
@@ -55,6 +56,8 @@ class App:
         self._queue_event(SystemEvent(type="system", data=data))
 
     def voice_event(self, text: str):
+        if self.output_callback:
+            self.output_callback(f"VOICE INPUT: {text}")
         self._queue_event(UserInputEvent(type="user", input=text))
 
     def _queue_event(self, event: UserInputEvent | SystemEvent):
