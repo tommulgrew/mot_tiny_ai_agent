@@ -22,12 +22,22 @@ class FileToolsConfig(BaseModel):
 
 class MemoryConfig(BaseModel):
     storage_path: str = "memory.json"
+    users_name: str | None = None
+    agents_name: str | None = None
+
+class SpeechToTextConfig(BaseModel):
+    enabled: bool = False
+    model_size: str = "small"
+    trigger_key: str = "ctrl_r"
+    sample_rate: int = 16000
+    language: str | None = None
 
 class Config(BaseModel):
     """Main configuration"""
     model: ModelConfig                      # LLM model configuration
     file_tools: FileToolsConfig
     memory: MemoryConfig
+    speech_to_text: SpeechToTextConfig
 
 def load_config(path: str) -> Config:
     with open(path, encoding="utf-8") as f:

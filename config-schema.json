@@ -79,6 +79,43 @@
                 "storage_path": {
                     "type": "string",
                     "description": "Path and filename to memory JSON file"
+                },
+                "users_name": {
+                    "type": "string",
+                    "description": "The user's name"
+                },
+                "agents_name": {
+                    "type": "string",
+                    "description": "The AI agent's name"
+                }
+            }
+        },
+        "speech_to_text": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [ "enabled" ],
+            "properties": {
+                "enabled": {
+                    "type": "boolean"
+                },
+                "model_size": {
+                    "enum": ["tiny", "base", "small", "medium", "large"],
+                    "description": "fast-whisper model size. Larger models are more accurate but slower. 'small' is recommended for CPU use.",
+                    "default": "small"
+                },
+                "trigger_key": {
+                    "type": "string",
+                    "default": "ctrl_r",
+                    "description": "pynput key name to use as the push-to-talk trigger (e.g. 'ctrl_r' for right Ctrl). Hold to record, release to transcribe."
+                },
+                "language": {
+                    "type": "string",
+                    "description": "BCP-47 language code for transcription (e.g. 'en'). Omit to enable auto-detection."
+                },
+                "sample_rate": {
+                    "type": "number",
+                    "default": 16000,
+                    "description": "Sampling rate (Hz)"
                 }
             }
         }

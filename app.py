@@ -6,6 +6,7 @@ import asyncio
 from ai_client import AIClient
 from ai_agent import AIAgent
 from ai_tools import AITools
+from speech_input import SpeechToTextInput
 from tools.browser_tools import BrowserTools
 from tools.file_tools import FileTools
 from tools.speak_tools import SpeakTools
@@ -41,11 +42,20 @@ class App:
         self.event_queue = asyncio.Queue()
         asyncio.create_task(self._process_queue())
 
+        # Init speech-to-text
+        self.speech_to_text: SpeechToTextInput | None = None
+        if self.config.speech_to_text.enabled:
+            self.speech_to_text = SpeechToTextInput(self.config.speech_to_text, inject_callback=self.voice_event)
+            self.speech_to_text.start()
+
     def user_input(self, input: str):        
         self._queue_event(UserInputEvent(type="user", input=input))
 
     def system_event(self, data):
         self._queue_event(SystemEvent(type="system", data=data))
+
+    def voice_event(self, text: str):
+        self._queue_event(UserInputEvent(type="user", input=text))
 
     def _queue_event(self, event: UserInputEvent | SystemEvent):
         self.event_queue.put_nowait(event)

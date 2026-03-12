@@ -49,6 +49,10 @@ class MemoryHousekeepingAction(BaseModel):
     type: Literal["duplicate", "conflict"]
     memories: list[AISavedMemory]
 
+class KeywordMapping(BaseModel):
+    from_keywords: set[str]
+    to_keywords: set[str]
+
 # TODO: 
 # - Log/report tool calls, and other LLM output somewhere
 # - Save/load memory to file
@@ -60,6 +64,8 @@ class AIMemory:
     def __init__(self, client: AIClient, config: MemoryConfig):
         self.client = client
         self.storage_path = Path(config.storage_path)
+        self.users_name = config.users_name
+        self.agents_name = config.agents_name
         self.id_generator = 0
         self.memories: list[AISavedMemory] = []
         self.housekeeping_actions: list[MemoryHousekeepingAction] = []
@@ -74,6 +80,9 @@ class AIMemory:
         # Create stemmer
         self.stemmer = Stemmer.Stemmer('english')
 
+        # Create keyword mappings (requires stemmer)
+        self.keyword_mappings: list[KeywordMapping] = self._make_keyword_mappings()
+
         # Create task queue
         self.task_queue = asyncio.Queue()
         asyncio.create_task(self._process_queue())
@@ -82,9 +91,15 @@ class AIMemory:
         """Create memories from a snippet of conversation"""
         self.task_queue.put_nowait(CreateMemoriesTask(type="create", conversation=conversation))
 
-    def retrieve(self, conversation: str) -> list[str]:
+    def retrieve(self, conversation: str, housekeeping: bool = True) -> list[str]:
         """Retrieve memories based on snippet of conversation"""
+
+        # Add mapped keywords
         keywords = set(self.get_keywords(conversation))
+        for mapping in self.keyword_mappings:
+            if bool(keywords & mapping.from_keywords):
+                keywords.update(mapping.to_keywords)
+
         memories = [ 
             m
             for m in self.memories 
@@ -92,7 +107,8 @@ class AIMemory:
         ]
 
         # Queue a memory housekeeping task
-        self.task_queue.put_nowait(MemoryHousekeepingTask(type="housekeeping", memories=memories))
+        if housekeeping:
+            self.task_queue.put_nowait(MemoryHousekeepingTask(type="housekeeping", memories=memories))
 
         random.shuffle(memories)
         if len(memories) > 8:
@@ -225,6 +241,8 @@ class AIMemory:
         return next((m for m in self.memories if m.id == id), None)
 
     async def _do_housekeeping_action(self, type: Literal["duplicate", "conflict"], id1: int, id2: int) -> str:
+        if id1 == id2:
+            return "ERROR: Memory IDs must be different"
 
         # Find memories
         memory1 = self._get_memory_by_id(id1)
@@ -288,6 +306,19 @@ class AIMemory:
         json_text = file.model_dump_json(indent=2)
         self.storage_path.write_text(json_text, encoding="utf-8")
         self.dirty = False
+
+    def _make_keyword_mappings(self) -> list[KeywordMapping]:
+        data = [
+            [f"I Im Ill me my myself mine {self.users_name or ''}", f"user {self.users_name or ''}"],
+            [f"you youll youre your yours {self.agents_name or ''}", f"assistant ai agent {self.agents_name or ''}"]
+        ]
+        return [
+            KeywordMapping(
+                from_keywords=set(self.get_keywords(d[0])),
+                to_keywords=set(self.get_keywords(d[1]))
+            )
+            for d in data 
+        ]
         
 
 def create_ai_prompts() -> AIMemoryPrompts:
@@ -321,14 +352,14 @@ You are a memory service for an AI chatbot.
 
 Examine the provided memories and check whether:
 
-1) Any two memories contradict each other. I.e. they *cannot* both be true. 
+1) Any two distinct memories contradict each other. I.e. they *cannot* both be true. 
 
 Example 1.a: "User's name is Bob" conflicts with "User's name is Mary".
 Example 1.b: "Bob likes cats" conflicts with "Bob can't stand cats"
 
 Use the report_conflict tool to report any pairs of conflicting memories (if any).
 
-2) Any two memories that are duplicates of each other. I.e. they both state the *same* thing.
+2) Any two distinct memories are duplicates of each other. I.e. they both state the *same* thing.
 
 Example 2.a: "User's name is George" is a duplicate of "The user prefers to be called George"
 Example 2.b: "George likes programming" is a duplicate of "George's hobbies include programming"

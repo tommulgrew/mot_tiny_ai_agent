@@ -1,10 +1,11 @@
 import json
 from collections import deque
+from os import name
 from typing import Callable
 from openai.types.chat import ChatCompletionMessageParam
 from pydantic import BaseModel
 from ai_client import AIClient
-from ai_tools import AITools
+from ai_tools import AITool, AITools, AIToolParam
 from ai_memory import AIMemory
 
 class AIAgentPrompts(BaseModel):
@@ -16,6 +17,8 @@ class AIAgent:
         self.client = client
         self.memory = memory
         self.tools = tools
+        if self.tools:
+            self.tools.add([self._make_recall_memories_tool()])
         self.output_callback = output_callback
         self.prompts = create_ai_prompts()
         self.message_history = deque(maxlen=20)
@@ -67,6 +70,23 @@ class AIAgent:
             self.client.get_message_content(msg).strip().startswith("{ relevant_memories:")
         )
 
+    def _make_recall_memories_tool(self) -> AITool:
+        return AITool(
+            name="recall_memories",
+            description="Lookup previously stored memories related to one or more keywords",
+            params=[
+                AIToolParam(
+                    name="keywords",
+                    type="string",
+                    description="Comma separated list of keywords"                    
+                )
+            ],
+            async_callback=self._recall_memories_tool
+        )
+
+    async def _recall_memories_tool(self, keywords: str) -> str:
+        memories = self.memory.retrieve(keywords, housekeeping=False)
+        return json.dumps(memories) if memories else "No memories found"
 
 def create_ai_prompts() -> AIAgentPrompts:
     return AIAgentPrompts(
