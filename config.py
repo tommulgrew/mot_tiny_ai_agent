@@ -24,6 +24,7 @@ class MemoryConfig(BaseModel):
     storage_path: str = "memory.json"
     users_name: str | None = None
     agents_name: str | None = None
+    extra_info: list[str] | None = None
 
 class SpeechToTextConfig(BaseModel):
     enabled: bool = False
@@ -32,12 +33,18 @@ class SpeechToTextConfig(BaseModel):
     sample_rate: int = 16000
     language: str | None = None
 
+class AppConfig(BaseModel):
+    name: str
+    path: str
+    description: str | None = None
+
 class Config(BaseModel):
     """Main configuration"""
     model: ModelConfig                      # LLM model configuration
     file_tools: FileToolsConfig
     memory: MemoryConfig
     speech_to_text: SpeechToTextConfig
+    allowed_apps: list[AppConfig] | None = None
 
 def load_config(path: str) -> Config:
     with open(path, encoding="utf-8") as f:

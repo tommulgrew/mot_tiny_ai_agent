@@ -148,6 +148,8 @@ class AIClient:
                 try:
                     tool_result = await tools.call_tool(tool_call.function.name, tool_args)
                 except AIToolError as exc:
+                    if output_callback:
+                        output_callback(f"[Tool error: {exc}]")
                     tool_result = f"ERROR: {exc}"
 
                 # Add tool result message

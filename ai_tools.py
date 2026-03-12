@@ -50,5 +50,10 @@ class AITools:
         ]
 
         # Call tool callback
+        result = await tool.async_callback(*params)
+        
+        # Record tool as called *ONLY* if no exception was thrown.
+        # This allows the LLM to try calling "single use" tools again if an error occurs.
         self.called_tools.add(name)
-        return await tool.async_callback(*params)
+
+        return result

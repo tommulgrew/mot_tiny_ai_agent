@@ -87,6 +87,13 @@
                 "agents_name": {
                     "type": "string",
                     "description": "The AI agent's name"
+                },
+                "extra_info": {
+                    "type": "array",
+                    "description": "Any extra information for the agent. This is included in the system prompt.",
+                    "items": {
+                        "type": "string"
+                    }
                 }
             }
         },
@@ -116,6 +123,33 @@
                     "type": "number",
                     "default": 16000,
                     "description": "Sampling rate (Hz)"
+                }
+            }
+        },
+        "allowed_apps": {
+            "type": "array",
+            "description": "White list of apps the agent is allowed to launch.",
+            "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [ "name", "path" ],
+                "properties": {
+                    "name": {
+                        "type": "string",
+                        "description": "The name of the application. This is what the agent will use to launch it."                        
+                    },
+                    "path": {
+                        "type": "string",
+                        "description": "The full path and filename"
+                    },
+                    "description": {
+                        "type": "string",
+                        "description": "Short description of the application, displayed to the agent when apps are listed."
+                    },
+                    "start_in_folder": {
+                        "type": "string",
+                        "description": "The full path to the folder to start the application in. If ommitted will be inferred from the 'path'."
+                    }
                 }
             }
         }

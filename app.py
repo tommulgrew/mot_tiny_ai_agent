@@ -7,6 +7,7 @@ from ai_client import AIClient
 from ai_agent import AIAgent
 from ai_tools import AITools
 from speech_input import SpeechToTextInput
+from tools.app_tools import AppTools
 from tools.browser_tools import BrowserTools
 from tools.file_tools import FileTools
 from tools.speak_tools import SpeakTools
@@ -33,6 +34,7 @@ class App:
         memory = AIMemory(client, self.config.memory)
         tools = self._create_ai_tools()
         self.agent = AIAgent(
+            config=self.config.memory,
             client=client, 
             memory=memory, 
             tools=tools, 
@@ -85,7 +87,9 @@ class App:
 
         tools.add(BrowserTools().make_tools())
         if self.config.file_tools:
-            tools.add(FileTools(self.config.file_tools).make_tools())
+            tools.add(FileTools(self.config.file_tools).make_tools())        
         tools.add(SpeakTools().make_tools())
+        if self.config.allowed_apps:
+            tools.add(AppTools(self.config.allowed_apps).make_tools())
 
         return tools

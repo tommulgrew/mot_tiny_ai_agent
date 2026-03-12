@@ -7,20 +7,21 @@ from pydantic import BaseModel
 from ai_client import AIClient
 from ai_tools import AITool, AITools, AIToolParam
 from ai_memory import AIMemory
+from config import MemoryConfig
 
 class AIAgentPrompts(BaseModel):
     main: str           # Main agent system prompt
 
 class AIAgent:
     """A basic autonomous AI agent"""
-    def __init__(self, client: AIClient, memory: AIMemory, tools: AITools | None, output_callback: Callable[[str], None] | None = None):
+    def __init__(self, config: MemoryConfig, client: AIClient, memory: AIMemory, tools: AITools | None, output_callback: Callable[[str], None] | None = None):
         self.client = client
         self.memory = memory
         self.tools = tools
         if self.tools:
             self.tools.add([self._make_recall_memories_tool()])
         self.output_callback = output_callback
-        self.prompts = create_ai_prompts()
+        self.prompts = create_ai_prompts(users_name=config.users_name, agents_name=config.agents_name, extra_info=config.extra_info)
         self.message_history = deque(maxlen=20)
 
     async def process_user_message(self, message: str):
@@ -88,9 +89,19 @@ class AIAgent:
         memories = self.memory.retrieve(keywords, housekeeping=False)
         return json.dumps(memories) if memories else "No memories found"
 
-def create_ai_prompts() -> AIAgentPrompts:
+def create_ai_prompts(users_name: str | None, agents_name: str | None, extra_info: list[str] | None) -> AIAgentPrompts:
+
+    extra_info_lines = []
+    if agents_name:
+        extra_info_lines.append(f"Your name is {agents_name}.")
+    if users_name:
+        extra_info_lines.append(f"The user's name is {users_name}.")
+    if extra_info:
+        extra_info_lines.extend(extra_info)
+    extra_info_text = "\n".join(extra_info_lines)
+
     return AIAgentPrompts(
-        main="""\
+        main=f"""\
 You are an helpful and proactive AI agent that acts like a secretary for the user.
 
 Perform tasks when requested by the user, using the available tools calls.
@@ -100,5 +111,6 @@ Output: You can respond in three ways:
 - Text - Displayed directly to the user.
 - Tool calls - Invoke tools to perform actions.
 - No output - When you determine no action or response is required, respond with only the text: NO_OUTPUT
-  This response will be filtered out and never shown to the user.
+
+{extra_info_text if extra_info_text else ""}\
 """)

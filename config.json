@@ -13,10 +13,37 @@
     "memory": {
         "storage_path": "memory.json",
         "users_name": "Tom",
-        "agents_name": "Alfred"
+        "agents_name": "Alfred",
+        "extra_info": []
     },
     "speech_to_text": {
         "enabled": true,
         "trigger_key": "alt_gr"
-    }
+    },
+    "allowed_apps": [
+        {
+            "name": "Steam",
+            "description": "The Steam game launcher",
+            "path": "C:\\Program Files (x86)\\Steam\\steam.exe"
+        },
+        {
+            "name": "Pico-8",
+            "description": "The Pico-8 fantasy console",
+            "path": "C:\\Program Files (x86)\\PICO-8\\pico8.exe"
+        },
+        {
+            "name": "Email",
+            "path": "C:\\Program Files\\Mozilla Thunderbird\\thunderbird.exe"
+        },
+        {
+            "name": "Gimp",
+            "description": "The gimp image editor",
+            "path": "C:\\Program Files\\GIMP 2\\bin\\gimp-2.10.exe"
+        },
+        {
+            "name": "Blender3D",
+            "description": "The Blender 3D modelling tool",
+            "path": "C:\\Program Files\\Blender Foundation\\Blender 3.3\\blender-launcher.exe"
+        }
+    ]
 }
