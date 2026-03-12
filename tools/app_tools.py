@@ -30,7 +30,7 @@ class AppTools:
         return "\n".join(f"{app.name}, - {app.description if app.description else ''}" for app in self.apps)
 
     async def _open_app(self, name: str) -> str:
-        app = next((app for app in self.apps if app.name == name), None)
+        app = next((app for app in self.apps if app.name.lower() == name.lower()), None)
         if not app: 
             return f"App '{name}' not found. Use 'list_apps' to list available apps."
 

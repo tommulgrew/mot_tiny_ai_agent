@@ -1,7 +1,7 @@
 {
     "$schema": "config-schema.json",
     "model": {
-        "name": "qwen/qwen3.5-9b"
+        "name": "qwen/qwen3-8b"
     },
     "file_tools": {
         "folders": [
