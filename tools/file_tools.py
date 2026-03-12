@@ -1,9 +1,13 @@
 import datetime
 import shutil
 import subprocess
+import re
 from pathlib import Path
 from ai_tools import AIToolParam, AITool, AIToolError
 from config import FileToolsConfig, FolderConfig
+
+class AbortFileSearchException(Exception):
+    """Raised to abort the file search."""
 
 class FileTools:
     def __init__(self, config: FileToolsConfig):
@@ -78,6 +82,17 @@ class FileTools:
                 ],
                 async_callback=self._show_in_explorer,
             ),
+            AITool(
+                name="search_files",
+                description="Search file contents for lines matching a regex pattern.",
+                params=[
+                    AIToolParam(name="path", type="string", description="Folder to search, starting with a folder alias."),
+                    AIToolParam(name="pattern", type="string", description="Regex pattern to match against file contents, e.g. 'hello' or '(cats|dogs)'. Case insensitive."),
+#                    AIToolParam(name="file_wildcard", type="string", description="Filter files by name, e.g. '*.txt', '*.py'. Omit to search all files.", optional=True),
+                    AIToolParam(name="recursive", type="boolean", description="True to include subfolders, false for current folder only.")
+                ],
+                async_callback=self._search_files
+            )
         ]
 
     def _resolve_path(self, virtual_path: str) -> tuple[FolderConfig, Path]:
@@ -197,3 +212,50 @@ class FileTools:
         else:
             subprocess.Popen(["explorer", str(real_path)])
             return f"Opened Explorer at {path}"
+
+    async def _search_files(self, path: str, pattern: str, recursive: bool | None) -> str:
+        _, real_path = self._resolve_path(path)
+
+        if recursive is None:
+            recursive = False
+
+        if not real_path.exists():
+            raise AIToolError(f"Path does not exist: {path}")
+
+        if real_path.is_file():
+            raise AIToolError(f"Not a folder: {path}")
+
+        # Find files
+        files = real_path.rglob("*.*") if recursive else real_path.glob("*.*")
+        if not files:
+            return "No files found"
+
+        # Search each file
+        results:list[str] = []
+        file_ct = 0
+        try:
+            for file in files:
+                if file.is_file():
+
+                    # Search each line
+                    for i, line in enumerate(file.read_text(errors="ignore").splitlines(), 1):
+                        line = line.strip()
+                        if len(line) <= 200 and re.search(pattern, line, re.IGNORECASE):
+
+                            # Convert file path back to virtual
+                            virtual_path = Path(path) / (file.relative_to(real_path))
+                            results.append(f"file: {str(virtual_path)}, line: {i}, text: {line}")
+
+                            # Stop after 10 matches
+                            if len(results) >= 10:
+                                raise AbortFileSearchException("Search stopped after 10 results")
+                            break
+
+                # Stop after 1000 files
+                file_ct += 1
+                if file_ct >= 1000:                         # Stop after 1000 files searched
+                    raise AbortFileSearchException("Search stopped after 1000 files")
+        except AbortFileSearchException as e:
+            results.append(str(e))
+
+        return "\n".join(results) if results else "No matches found"        
