@@ -18,11 +18,11 @@ class AICompletionStats(BaseModel):
 class AIClient:
     """Basic client for OpenAI chat completions API, with tool callbacks"""
     
-    def __init__(self, settings: ModelConfig):
-        self.settings = settings
+    def __init__(self, config: ModelConfig):
+        self.config = config
         self.client = AsyncClient(
-            api_key=settings.api_key,
-            base_url=settings.url
+            api_key=config.api_key,
+            base_url=config.url
         )
 
     async def chat(self, 
@@ -78,7 +78,7 @@ class AIClient:
             # Call chat completion service
             response = await self.client.chat.completions.create(
                     messages=[ system_message, *messages], 
-                    model=self.settings.name,
+                    model=self.config.name,
                     tools=completion_tools
                 )
 

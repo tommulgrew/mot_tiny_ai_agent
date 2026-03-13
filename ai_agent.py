@@ -1,5 +1,6 @@
 import logging
 import json
+from datetime import datetime
 from collections import deque
 from typing import Callable
 from openai import BadRequestError
@@ -7,14 +8,21 @@ from pydantic import BaseModel
 from ai_client import AIClient
 from ai_tools import AITool, AITools, AIToolParam
 from ai_memory import AIMemory
-from config import MemoryConfig
+from config import AgentConfig, MemoryConfig
 
 class AIAgentPrompts(BaseModel):
     main: str           # Main agent system prompt
 
+class AgentSystemInfo(BaseModel):
+    current_time: str
+    relevant_memories: list[str] | None
+
+class AgentSystemInfoMessage(BaseModel):
+    system_info: AgentSystemInfo
+
 class AIAgent:
     """A basic autonomous AI agent"""
-    def __init__(self, config: MemoryConfig, client: AIClient, memory: AIMemory, tools: AITools | None, output_callback: Callable[[str], None] | None = None):
+    def __init__(self, config: AgentConfig, client: AIClient, memory: AIMemory, tools: AITools | None, output_callback: Callable[[str], None] | None = None):
         self.client = client
         self.memory = memory
         self.tools = tools
@@ -32,20 +40,17 @@ class AIAgent:
 
     async def _process_event(self, content: str):
 
-        # Retrieve related memories
+        # Add system info message with the current time and any relevant memories.
         memories = self.memory.retrieve(content)
-        if memories:
-            # Serialize the memories as JSON, to (hopefully) help the LLM 
-            # understand it is not user input.
-            memory_text = f"{{ relevant_memories: {json.dumps(memories)} }}"
-
-            # Insert a memories message immediately before the main user input
-            user_prompt = [ memory_text, content ]
-        else:
-            user_prompt = content
+        system_info = AgentSystemInfoMessage(
+            system_info=AgentSystemInfo(
+                current_time=datetime.now().strftime('%A %d %B %Y %I:%M %p'),
+                relevant_memories=memories
+            )
+        )
 
         # Call chat client
-        new_messages = await self._call_chat_client(user_prompt)
+        new_messages = await self._call_chat_client([ system_info.model_dump_json(), content ])
 
         # Record memories
         memory_messages = [m for m in new_messages if not self._is_relevant_memories_msg(m)]        

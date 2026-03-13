@@ -7,7 +7,6 @@ class ModelConfig(BaseModel):
     name: str                               # Model name
     url: str = "http://localhost:1234/v1"   # URL to chat completions service. (Default is LM Studio default endpoint)
     api_key: str = "[not used]"
-    context_limit: int = 4096               # Token context limit. Must match limit configured at server end.
 
 # File tools config
 class FolderConfig(BaseModel):
@@ -22,9 +21,12 @@ class FileToolsConfig(BaseModel):
 
 class MemoryConfig(BaseModel):
     storage_path: str = "memory.json"
+
+class AgentConfig(BaseModel):
     users_name: str | None = None
     agents_name: str | None = None
     extra_info: list[str] | None = None
+    prompt_limit: int = 2000
 
 class SpeechToTextConfig(BaseModel):
     enabled: bool = False
@@ -43,6 +45,7 @@ class Config(BaseModel):
     model: ModelConfig                      # LLM model configuration
     file_tools: FileToolsConfig
     memory: MemoryConfig
+    agent: AgentConfig
     speech_to_text: SpeechToTextConfig
     allowed_apps: list[AppConfig] | None = None
 

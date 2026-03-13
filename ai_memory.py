@@ -7,12 +7,12 @@ from datetime import datetime
 from pathlib import Path
 from typing import Literal
 from openai import BadRequestError
-from pydantic import BaseModel, Field, ValidationError
+from pydantic import BaseModel
 import Stemmer
 import humanize
 from ai_client import AIClient
 from ai_tools import AITools, AITool, AIToolParam
-from config import MemoryConfig
+from config import AgentConfig, MemoryConfig
 
 class AIMemoryPrompts(BaseModel):
     create_memories: str        # Create memories from conversation snippet
@@ -66,11 +66,11 @@ class CreateMemoriesData(BaseModel):
 class AIMemory:
     """Basic AI memory service, for extracting and retrieving memories during conversation"""
     
-    def __init__(self, client: AIClient, config: MemoryConfig):
+    def __init__(self, client: AIClient, config: MemoryConfig, agent_config: AgentConfig):
         self.client = client
         self.storage_path = Path(config.storage_path)
-        self.users_name = config.users_name
-        self.agents_name = config.agents_name
+        self.users_name = agent_config.users_name
+        self.agents_name = agent_config.agents_name
         self.id_generator = 0
         self.memories: list[AISavedMemory] = []
         self.housekeeping_actions: list[MemoryHousekeepingAction] = []

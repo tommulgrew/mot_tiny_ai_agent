@@ -26,12 +26,7 @@
                     "type": "string",
                     "description": "API key, if required",
                     "default": "[not used]"
-                },
-                "context_limit": {
-                    "type": "number",
-                    "description": "Token context window size. This should be set to match the configuration at the server end. Used to manage chat completion call size, and detect truncation due to full context window",
-                    "default": 4096
-                }   
+                }
             },
             "required":["name"]
         },
@@ -79,6 +74,16 @@
                 "storage_path": {
                     "type": "string",
                     "description": "Path and filename to memory JSON file"
+                }
+            }
+        },
+        "agent": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+                "prompt_limit": {
+                    "type": "number",
+                    "description": "Prompt size limit in tokens. History messages will be removed once limit is reached."
                 },
                 "users_name": {
                     "type": "string",

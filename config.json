@@ -11,10 +11,13 @@
         "trash_path": "E:\\ai\\trash"
     },
     "memory": {
-        "storage_path": "memory.json",
+        "storage_path": "memory.json"
+    },
+    "agent": {
         "users_name": "Tom",
         "agents_name": "Alfred",
-        "extra_info": []
+        "extra_info": [],
+        "prompt_limit": 3500
     },
     "speech_to_text": {
         "enabled": true,

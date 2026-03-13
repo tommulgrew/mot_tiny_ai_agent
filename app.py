@@ -1,3 +1,4 @@
+from pathlib import Path
 from typing import Any, Literal, Callable
 from openai import BaseModel
 from ai_memory import AIMemory
@@ -11,6 +12,7 @@ from tools.app_tools import AppTools
 from tools.browser_tools import BrowserTools
 from tools.file_tools import FileTools
 from tools.speak_tools import SpeakTools
+from tools.reminder_tools import ReminderTools
 
 class UserInputEvent(BaseModel):
     type: Literal["user"]
@@ -30,11 +32,15 @@ class App:
         self.output_callback = output_callback
 
         # Wire up agent
-        client = AIClient(self.config.model)
-        memory = AIMemory(client, self.config.memory)
+        client = AIClient(config=self.config.model)
+        memory = AIMemory(
+            client=client, 
+            config=self.config.memory, 
+            agent_config=self.config.agent
+        )
         tools = self._create_ai_tools()
         self.agent = AIAgent(
-            config=self.config.memory,
+            config=self.config.agent,
             client=client, 
             memory=memory, 
             tools=tools, 
@@ -85,6 +91,7 @@ class App:
     def _create_ai_tools(self) -> AITools:
         tools = AITools()
 
+        tools.add(ReminderTools(Path("reminders.json"), self._reminder_callback).make_tools())
         tools.add(BrowserTools().make_tools())
         if self.config.file_tools:
             tools.add(FileTools(self.config.file_tools).make_tools())        
@@ -93,3 +100,11 @@ class App:
             tools.add(AppTools(self.config.allowed_apps).make_tools())
 
         return tools
+
+    def _reminder_callback(self, message: str):
+        self.system_event({
+            "system_event": {
+                "type": "scheduled reminder",
+                "message" : message
+            }
+        })
