@@ -1,8 +1,7 @@
 import json
 from collections import deque
-from os import name
 from typing import Callable
-from openai.types.chat import ChatCompletionMessageParam
+from openai import BadRequestError
 from pydantic import BaseModel
 from ai_client import AIClient
 from ai_tools import AITool, AITools, AIToolParam
@@ -45,20 +44,43 @@ class AIAgent:
             user_prompt = content
 
         # Call chat client
-        new_messages = await self.client.chat(
-            system_prompt=self.prompts.main,
-            user_prompt=user_prompt,
-            message_history=self.message_history,
-            tools=self.tools,
-            output_callback=self._filter_output
-        )
-
-        # Add to history
-        self.message_history.extend(new_messages)
+        new_messages = await self._call_chat_client(user_prompt)
 
         # Record memories
         memory_messages = [m for m in new_messages if not self._is_relevant_memories_msg(m)]        
         self.memory.create_memories(memory_messages, memories)
+
+    async def _call_chat_client(self, user_prompt: list[str] | str) -> list:
+        # Retry until call completes without context overflowing.
+        # (Removing history messages as necessary)
+        while True:
+            try:
+                # Call client
+                new_messages = await self.client.chat(
+                    system_prompt=self.prompts.main,
+                    user_prompt=user_prompt,
+                    message_history=self.message_history,
+                    tools=self.tools,
+                    output_callback=self._filter_output
+                )
+
+                # Add to history
+                self.message_history.extend(new_messages)
+
+                # TODO: if prompt tokens exceed a certain limit, remove history messages
+                # Use response.usage.prompt_tokens. Client will need to pass this info back
+
+                return new_messages
+            
+            except BadRequestError as e:
+                if "Context size has been exceeded" not in str(e):
+                    raise
+
+                # Context size exceeded - Trim message history and try again
+                if self.message_history:
+                    self.message_history.pop()
+                else:
+                    raise                           # No history left to trim!
 
     def _filter_output(self, output: str):
         if self.output_callback and output: # and output != "NO_OUTPUT":
