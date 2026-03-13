@@ -44,10 +44,12 @@ class AITools:
             raise AIToolError(f"The '{name}' tool cannot be called again this turn.")
 
         # Collect parameters
-        params = [
-            args_dict[p.name] if not p.optional else args_dict.get(p.name)
-            for p in tool.params
-        ]
+        params = []
+        for p in tool.params:
+            value = args_dict.get(p.name)
+            if value is None and not p.optional:
+                raise AIToolError(f"Required parameter '{p.name}' is missing")
+            params.append(value)
 
         # Call tool callback
         result = await tool.async_callback(*params)
