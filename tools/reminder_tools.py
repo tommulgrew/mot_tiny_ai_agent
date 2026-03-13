@@ -34,8 +34,9 @@ class ReminderTools:
             AITool(
                 name="create_reminder",
                 description=(
-                    "Create a reminder that fires an event at a specified date and time, "
-                    "with a message you provide. Optionally repeats on a schedule. "
+                    "Create a reminder that fires an event at a specified date and time, with a message you provide."
+                    "You, the AI agent, will receive a notification when the reminder fires, which you can pass on to the user, or act upon as appropriate. "
+                    "Optionally repeats on a schedule. "
                     "Time format: 'YYYY-MM-DD HH:MM' (e.g. '2026-03-04 09:00'). "
                     "Valid recurrence values: 'daily', 'weekly', 'monthly'."
                 ),

@@ -8,6 +8,7 @@ from ai_client import AIClient
 from ai_agent import AIAgent
 from ai_tools import AITools
 from speech_input import SpeechToTextInput
+from tools import reminder_tools
 from tools.app_tools import AppTools
 from tools.browser_tools import BrowserTools
 from tools.file_tools import FileTools
@@ -66,7 +67,7 @@ class App:
     def voice_event(self, text: str):
         if self.output_callback:
             self.output_callback(f"VOICE INPUT: {text}")
-        self._queue_event(UserInputEvent(type="user", input=text))
+        self._queue_event(UserInputEvent(type="user", input=f"[Voice input]: {text}"))
 
     def _queue_event(self, event: UserInputEvent | SystemEvent):
         self.event_queue.put_nowait(event)
@@ -91,7 +92,10 @@ class App:
     def _create_ai_tools(self) -> AITools:
         tools = AITools()
 
-        tools.add(ReminderTools(Path("reminders.json"), self._reminder_callback).make_tools())
+        reminder_tools = ReminderTools(Path("reminders.json"), self._reminder_callback)
+        asyncio.create_task(reminder_tools.check_task())
+        tools.add(reminder_tools.make_tools())
+
         tools.add(BrowserTools().make_tools())
         if self.config.file_tools:
             tools.add(FileTools(self.config.file_tools).make_tools())        

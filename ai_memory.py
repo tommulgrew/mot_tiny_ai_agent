@@ -196,8 +196,29 @@ class AIMemory:
         )
 
         # Resolve reported duplicates and conflicts
-        # TO DO
-        logging.info(f"{len(self.housekeeping_actions)} housekeeping actions found")
+        for a in self.housekeeping_actions:
+
+            if not memories[0] in self.memories or not memories[1] in self.memories:
+                continue        # Can happen if a previous action removed one of the memories. Skip this action to leave the remaining memory alone.
+
+            # Sort by time created
+            memories = sorted(a.memories, key=lambda x: x.when_created)
+
+            if a.type == "conflict":
+                # Remove older memory
+                self.memories.remove(memories[0])
+            
+            elif a.type == "duplicate":
+                # Merge keywords from newer memory into older
+                memories[0].keywords = list(set([*memories[0].keywords, *memories[1].keywords]))
+
+                # Remove newer memory
+                self.memories.remove(memories[1])
+
+            self.dirty = True
+            
+        if self.dirty:
+            self._save()
 
     def _make_save_memory_tools(self) -> AITools:
         tools = AITools()

@@ -216,4 +216,5 @@ __marimo__/
 .streamlit/secrets.toml
 
 memory.json
+reminders.json
 log.txt
