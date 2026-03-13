@@ -4,12 +4,16 @@ from openai.types.chat.chat_completion_tool_param import FunctionDefinition
 from typing import Callable, Iterable, cast
 from ai_tools import AIToolError, AITools, AITool
 from config import ModelConfig
-from openai import AsyncClient
+from openai import AsyncClient, BaseModel
 from openai.types.chat import ChatCompletionMessageParam, ChatCompletionAssistantMessageParam, ChatCompletionSystemMessageParam, ChatCompletionMessageToolCallParam, ChatCompletionFunctionToolParam, ChatCompletionToolMessageParam, ChatCompletionUserMessageParam
 from util import log_dump
 
 class AIClientError(Exception):
     """General AI chat completion client error"""
+
+class AICompletionStats(BaseModel):
+    prompt_tokens: int
+    completion_tokens: int
 
 class AIClient:
     """Basic client for OpenAI chat completions API, with tool callbacks"""
@@ -27,7 +31,7 @@ class AIClient:
             message_history: Iterable[ChatCompletionMessageParam] = [],
             tools: AITools | None = None,
             strip_think: bool = True,
-            output_callback: Callable[[str], None] | None = None) -> list[ChatCompletionMessageParam]:
+            output_callback: Callable[[str], None] | None = None) -> tuple[list[ChatCompletionMessageParam], AICompletionStats | None]:
         """Call the chat completions API, resolve any tool calls and return the new messages generated"""
 
         # Normalise user_prompt into an array
@@ -131,7 +135,11 @@ class AIClient:
 
             # If not a tool call, we are finished
             if choice.finish_reason != 'tool_calls':
-                return new_messages
+                stats = AICompletionStats(
+                    prompt_tokens=response.usage.prompt_tokens, 
+                    completion_tokens=response.usage.completion_tokens
+                ) if response.usage else None
+                return new_messages, stats
 
             # Call tools
             if not tools:

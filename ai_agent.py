@@ -1,3 +1,4 @@
+import logging
 import json
 from collections import deque
 from typing import Callable
@@ -56,7 +57,7 @@ class AIAgent:
         while True:
             try:
                 # Call client
-                new_messages = await self.client.chat(
+                new_messages, stats = await self.client.chat(
                     system_prompt=self.prompts.main,
                     user_prompt=user_prompt,
                     message_history=self.message_history,
@@ -67,8 +68,9 @@ class AIAgent:
                 # Add to history
                 self.message_history.extend(new_messages)
 
-                # TODO: if prompt tokens exceed a certain limit, remove history messages
-                # Use response.usage.prompt_tokens. Client will need to pass this info back
+                # Trim history if prompt size exceeds limit
+                if stats and stats.prompt_tokens > 2000:
+                    self._trim_message_history()
 
                 return new_messages
             
@@ -78,9 +80,16 @@ class AIAgent:
 
                 # Context size exceeded - Trim message history and try again
                 if self.message_history:
-                    self.message_history.pop()
+                    logging.warning("Context sizes exceeded. Trimming history and retrying.")
+                    self._trim_message_history()
                 else:
                     raise                           # No history left to trim!
+
+    def _trim_message_history(self):
+        # Remove 3 oldest messages
+        for _ in range(0, 3):
+            if self.message_history:
+                self.message_history.pop()
 
     def _filter_output(self, output: str):
         if self.output_callback and output: # and output != "NO_OUTPUT":

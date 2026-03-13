@@ -149,7 +149,7 @@ class AIMemory:
 
     async def _do_chat_tool_operation(self, system_prompt: str, user_prompt: str, tools: AITools):
         try:
-            response = await self.client.chat(
+            _,_ = await self.client.chat(
                 system_prompt=system_prompt,
                 user_prompt=user_prompt,
                 tools=tools
