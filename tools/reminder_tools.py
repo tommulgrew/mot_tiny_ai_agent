@@ -41,7 +41,7 @@ class ReminderTools:
                     "Valid recurrence values: 'daily', 'weekly', 'monthly'."
                 ),
                 params=[
-                    AIToolParam(name="message", type="string", description="The reminder message to deliver when triggered"),
+                    AIToolParam(name="message", type="string", description="The reminder message to deliver when triggered. DO NOT time-relative terms like 'tomorrow' or 'next Tuesday'."),
                     AIToolParam(name="trigger_time", type="string", description="When to trigger, in 'YYYY-MM-DD HH:MM' format"),
                     AIToolParam(name="recurrence", type="string", description="Optional repeat schedule: 'daily', 'weekly', or 'monthly'", optional=True),
                 ],
