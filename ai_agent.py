@@ -23,6 +23,7 @@ class AgentSystemInfoMessage(BaseModel):
 class AIAgent:
     """A basic autonomous AI agent"""
     def __init__(self, config: AgentConfig, client: AIClient, memory: AIMemory, tools: AITools | None, output_callback: Callable[[str], None] | None = None):
+        self.config = config
         self.client = client
         self.memory = memory
         self.tools = tools
@@ -74,7 +75,7 @@ class AIAgent:
                 self.message_history.extend(new_messages)
 
                 # Trim history if prompt size exceeds limit
-                if stats and stats.prompt_tokens > 2000:
+                if stats and stats.prompt_tokens + stats.completion_tokens > self.config.prompt_limit:
                     self._trim_message_history()
 
                 return new_messages
