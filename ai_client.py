@@ -6,7 +6,7 @@ from ai_tools import AIToolError, AITools, AITool
 from config import ModelConfig
 from openai import AsyncClient, BaseModel
 from openai.types.chat import ChatCompletionMessageParam, ChatCompletionAssistantMessageParam, ChatCompletionSystemMessageParam, ChatCompletionMessageToolCallParam, ChatCompletionFunctionToolParam, ChatCompletionToolMessageParam, ChatCompletionUserMessageParam
-from util import log_dump
+from util import create_logger, log_dump
 
 class AIClientError(Exception):
     """General AI chat completion client error"""
@@ -24,6 +24,9 @@ class AIClient:
             api_key=config.api_key,
             base_url=config.url
         )
+
+        # Create separate logger for chat completions dumps
+        self.chat_logger = create_logger("tinyagent.completions", "completions_log.txt", propagate=False)
 
     async def chat(self, 
             system_prompt: str, 
@@ -73,7 +76,7 @@ class AIClient:
         # Repeat until all tool calls resolved
         while True:
 
-            logging.debug("Chat API request: %s", log_dump([ system_message, *messages ]))            
+            self.chat_logger.debug("Chat API request: %s", log_dump([ system_message, *messages ]))            
 
             # Call chat completion service
             response = await self.client.chat.completions.create(
@@ -82,7 +85,7 @@ class AIClient:
                     tools=completion_tools
                 )
 
-            logging.debug("Chat API response: %s", log_dump(response))            
+            self.chat_logger.debug("Chat API response: %s", log_dump(response))            
 
             # Extract response message and content
             choice = response.choices[0]

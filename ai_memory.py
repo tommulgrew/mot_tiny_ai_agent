@@ -67,6 +67,8 @@ class AIMemory:
     """Basic AI memory service, for extracting and retrieving memories during conversation"""
     
     def __init__(self, client: AIClient, config: MemoryConfig, agent_config: AgentConfig):
+        self.logger = logging.getLogger("tinyagent.memory")
+
         self.client = client
         self.storage_path = Path(config.storage_path)
         self.users_name = agent_config.users_name
@@ -165,6 +167,7 @@ class AIMemory:
 
     async def _create_memories(self, conversation: str):
         """Create memories"""
+        self.logger.debug("Creating memories")
         await self._do_chat_tool_operation(
             system_prompt=self.prompts.create_memories, 
             user_prompt=conversation,
@@ -173,6 +176,8 @@ class AIMemory:
 
     async def _housekeep_memories(self, memories: list[AISavedMemory]):
         """Detect and resolve memory conflicts and duplicates"""
+
+        self.logger.debug("Housekeeping memories")
 
         # Convert to JSON
         housekeeping = HousekeepingMemories(
@@ -269,7 +274,7 @@ class AIMemory:
             )
         )
         self.dirty = True
-        logging.info(f"Saved memory: {memory}")
+        self.logger.info(f"Saved memory: {memory}")
         return "Memory saved"
 
     def _get_memory_by_id(self, id: int) -> AISavedMemory | None:
@@ -298,7 +303,7 @@ class AIMemory:
 
         # Add housekeeping action
         self.housekeeping_actions.append(MemoryHousekeepingAction(type=type, memories=[memory1, memory2]))
-        logging.info(f"Found {type} memories: {memory1.fact}({memory1.id}),{memory2.fact}({memory2.id})")
+        self.logger.info(f"Found {type} memories: {memory1.fact}({memory1.id}),{memory2.fact}({memory2.id})")
         return f"{type} reported succesfully"
 
     async def _report_duplicate_tool(self, id1: int, id2: int) -> str:

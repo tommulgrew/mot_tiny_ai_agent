@@ -1,3 +1,4 @@
+import logging
 from pathlib import Path
 from typing import Any, Literal, Callable
 from openai import BaseModel
@@ -5,7 +6,7 @@ from ai_memory import AIMemory
 from config import load_config
 import asyncio
 from ai_client import AIClient
-from ai_agent import AIAgent
+from ai_agent import AIAgent, AIAgentError
 from ai_tools import AITools
 from speech_input import SpeechToTextInput
 from tools import reminder_tools
@@ -27,6 +28,7 @@ class App:
     """Tiny agent main application class. Implements the main wireup and event queue"""
 
     def __init__(self, args, output_callback: Callable[[str], None] | None = None):
+        self.logger = logging.getLogger("tinyagent")
         
         # Parse configuration
         self.config = load_config(args.config)
@@ -85,6 +87,9 @@ class App:
                 elif event.type == "system":
                     await self.agent.process_system_event(event.data)
             
+            except AIAgentError as e:
+                self.logger.error(f"Agent error: {str(e)}")
+
             finally:
                 # Event done
                 self.event_queue.task_done()

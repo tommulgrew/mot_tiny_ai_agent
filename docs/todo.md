@@ -1,8 +1,8 @@
-[ ] - Port reminder tools from POC
+[X] - Port reminder tools from POC
 
-[ ] - Handle context overflows
-    [ ] - Remove historical messages and try again
-    [ ] - Avoid overflows (somewhat) by removing messages when context usage approaches the limit
+[X] - Handle context overflows
+    [X] - Remove historical messages and try again
+    [X] - Avoid overflows (somewhat) by removing messages when context usage approaches the limit
 
 [ ] - Email support
     [ ] - Tool calls
@@ -15,7 +15,28 @@
         Include rules in memory housekeeping, so that user can correct them.
     [ ] - Fetch rules and insert as a floating message.
 
-[ ] - Memory system
-    [ ] - Rework prompt to help memory service understand user input is not directed to them.
-    [ ] - Maybe encode text as JSON.
-    [ ] - Include agent's response.
+[ ] - Task lists
+    Allow agent to define task lists, that persist as a floating message.
+    Could combine with a timer event to break down larger tasks into steps.
+    [ ] - Agent task list.
+    [ ] - User task list. Less autonomous. Allows the AI to maintain a todo list for the user.
+
+[X] - Memory system
+    [X] - Rework prompt to help memory service understand user input is not directed to them.
+    [X] - Maybe encode text as JSON.
+    [X] - Include agent's response.
+
+[ ] - Web search using duckduckgo search?
+
+        ```
+        pip install duckduckgo-search
+        ```
+
+        ```python
+        from duckduckgo_search import DDGS
+
+        def search(query: str, max_results: int = 5) -> list[dict]:
+            with DDGS() as ddgs:
+                results = list(ddgs.text(query, max_results=max_results))
+            return results
+        ```

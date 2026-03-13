@@ -3,6 +3,7 @@ import json
 from datetime import datetime
 from collections import deque
 from typing import Callable
+import humanize
 from openai import BadRequestError
 from pydantic import BaseModel
 from ai_client import AIClient
@@ -15,14 +16,19 @@ class AIAgentPrompts(BaseModel):
 
 class AgentSystemInfo(BaseModel):
     current_time: str
+    user_last_active: str
     relevant_memories: list[str] | None
 
 class AgentSystemInfoMessage(BaseModel):
     system_info: AgentSystemInfo
 
+class AIAgentError(Exception):
+    """General agent errors"""
+
 class AIAgent:
     """A basic autonomous AI agent"""
     def __init__(self, config: AgentConfig, client: AIClient, memory: AIMemory, tools: AITools | None, output_callback: Callable[[str], None] | None = None):
+        self.logger = logging.getLogger("tinyagent.agent")
         self.config = config
         self.client = client
         self.memory = memory
@@ -32,8 +38,10 @@ class AIAgent:
         self.output_callback = output_callback
         self.prompts = create_ai_prompts(users_name=config.users_name, agents_name=config.agents_name, extra_info=config.extra_info)
         self.message_history = deque(maxlen=20)
+        self.user_last_active = datetime.now()
 
     async def process_user_message(self, message: str):
+        self.user_last_active = datetime.now()
         await self._process_event(message)
 
     async def process_system_event(self, data):
@@ -46,6 +54,7 @@ class AIAgent:
         system_info = AgentSystemInfoMessage(
             system_info=AgentSystemInfo(
                 current_time=datetime.now().strftime('%A %d %B %Y %I:%M %p'),
+                user_last_active=humanize.naturaltime(datetime.now() - self.user_last_active),
                 relevant_memories=memories
             )
         )
@@ -86,10 +95,10 @@ class AIAgent:
 
                 # Context size exceeded - Trim message history and try again
                 if self.message_history:
-                    logging.warning("Context sizes exceeded. Trimming history and retrying.")
+                    self.logger.warning("Context size exceeded. Trimming history and retrying.")
                     self._trim_message_history()
                 else:
-                    raise                           # No history left to trim!
+                    raise AIAgentError("Context size exceeded. Cannot recover.")
 
     def _trim_message_history(self):
         # Remove 3 oldest messages

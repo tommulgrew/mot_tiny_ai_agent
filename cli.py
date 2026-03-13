@@ -5,13 +5,13 @@ from args import parse_main_args
 from prompt_toolkit import PromptSession
 from prompt_toolkit.patch_stdout import patch_stdout
 
+from util import create_logger
+
 async def main():
 
-    logging.basicConfig(
-        filename="log.txt",
-        level=logging.DEBUG,
-        format="%(asctime)s %(levelname)s %(message)s"
-    )
+    # Init logging
+    logger = create_logger("tinyagent", "log.txt", propagate=False)
+    logger.info("Tiny agent started")
 
     # Prompt toolkit session
     session = PromptSession()
