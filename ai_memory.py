@@ -3,9 +3,9 @@ import asyncio
 from dataclasses import field
 import re
 import random
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Literal
+from typing import Callable, Literal
 from openai import BadRequestError
 from pydantic import BaseModel
 import Stemmer
@@ -80,6 +80,7 @@ class AIMemory:
         self.save_tools = self._make_save_memory_tools()
         self.housekeeping_tools = self._make_housekeeping_tools()
         self.dirty = False                  # True if memories need to be saved
+        self.user_last_active_callback: Callable[[], datetime] | None = None
 
         # Load memory file
         self._load()
@@ -90,9 +91,12 @@ class AIMemory:
         # Create keyword mappings (requires stemmer)
         self.keyword_mappings: list[KeywordMapping] = self._make_keyword_mappings()
 
-        # Create task queue
-        self.task_queue = asyncio.Queue()
-        asyncio.create_task(self._process_queue())
+        # Create async "extract memories" and "housekeeping" tasks with queues
+        self.llm_lock = asyncio.Lock()                  # Prevent concurrent LLM calls
+        self.extraction_queue = asyncio.Queue()
+        self.housekeeping_queue = asyncio.Queue()
+        asyncio.create_task(self._extraction_worker())
+        asyncio.create_task(self._housekeeping_worker())
 
     def create_memories(self, new_messages: list, active_memories: list[str]):
         """Create memories from a snippet of conversation"""
@@ -105,7 +109,7 @@ class AIMemory:
         )
         data_json = data.model_dump_json()
 
-        self.task_queue.put_nowait(CreateMemoriesTask(type="create", conversation=data_json))
+        self.extraction_queue.put_nowait(CreateMemoriesTask(type="create", conversation=data_json))
 
     def retrieve(self, conversation: str, housekeeping: bool = True) -> list[str]:
         """Retrieve memories based on snippet of conversation"""
@@ -124,7 +128,7 @@ class AIMemory:
 
         # Queue a memory housekeeping task
         if housekeeping:
-            self.task_queue.put_nowait(MemoryHousekeepingTask(type="housekeeping", memories=memories))
+            self.housekeeping_queue.put_nowait(MemoryHousekeepingTask(type="housekeeping", memories=memories))
 
         random.shuffle(memories)
         if len(memories) > 8:
@@ -133,29 +137,38 @@ class AIMemory:
         # Return facts
         return [m.fact for m in memories]
 
-    async def _process_queue(self):
-        """Main task queue loop"""
+    async def _extraction_worker(self):
+        """Main 'extract memories' worker loop"""
         while True:
-            task: CreateMemoriesTask | MemoryHousekeepingTask = await self.task_queue.get()
-
+            task: CreateMemoriesTask = await self.extraction_queue.get()
             try:
-                # Perform task
-                if task.type == "create":
-                    await self._create_memories(task.conversation)
-                elif task.type == "housekeeping":
-                    await self._housekeep_memories(task.memories)
-
+                await self._create_memories(task.conversation)
             finally:
-                # Task done
-                self.task_queue.task_done()
+                self.extraction_queue.task_done()
+
+    async def _housekeeping_worker(self):
+        """Main housekeeping worker loop"""
+        while True:
+            task: MemoryHousekeepingTask = await self.housekeeping_queue.get()
+
+            # Wait until user has been inactive for at least 10 minutes
+            while self._is_user_active(timedelta(minutes=10)):
+                await asyncio.sleep(60)
+
+            # Perform task
+            try:                
+                await self._housekeep_memories(task.memories)
+            finally:
+                self.housekeeping_queue.task_done()
 
     async def _do_chat_tool_operation(self, system_prompt: str, user_prompt: str, tools: AITools):
         try:
-            _,_ = await self.client.chat(
-                system_prompt=system_prompt,
-                user_prompt=user_prompt,
-                tools=tools
-            )
+            async with self.llm_lock:               # Prevent concurrent LLM calls
+                _,_ = await self.client.chat(
+                    system_prompt=system_prompt,
+                    user_prompt=user_prompt,
+                    tools=tools
+                )
         except BadRequestError as e:
             if "Context size has been exceeded" not in str(e):
                 raise
@@ -359,7 +372,12 @@ class AIMemory:
             )
             for d in data 
         ]
-        
+
+    def _is_user_active(self, timespan: timedelta) -> bool:
+        if self.user_last_active_callback:
+            return datetime.now() - self.user_last_active_callback() < timespan
+        else:
+            return False        # User activity information is unavailable. Proceed as if the user is offline.        
 
 def create_ai_prompts() -> AIMemoryPrompts:
     return AIMemoryPrompts(

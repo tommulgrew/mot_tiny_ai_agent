@@ -1,3 +1,4 @@
+from datetime import datetime
 import logging
 from pathlib import Path
 from typing import Any, Literal, Callable
@@ -49,6 +50,7 @@ class App:
             tools=tools, 
             output_callback=output_callback
         )
+        memory.user_last_active_callback = self._get_user_last_active
 
         # Create event queue
         self.event_queue = asyncio.Queue()
@@ -117,3 +119,6 @@ class App:
                 "message" : message
             }
         })
+
+    def _get_user_last_active(self) -> datetime:
+        return self.agent.user_last_active
