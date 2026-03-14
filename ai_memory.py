@@ -25,11 +25,9 @@ class AISavedMemory(BaseModel):
     when_created: datetime
 
 class CreateMemoriesTask(BaseModel):
-    type: Literal["create"]
     conversation: str
 
 class MemoryHousekeepingTask(BaseModel):
-    type: Literal["housekeeping"]
     memories: list[AISavedMemory]
 
 class AIMemoryFile(BaseModel):
@@ -109,7 +107,7 @@ class AIMemory:
         )
         data_json = data.model_dump_json()
 
-        self.extraction_queue.put_nowait(CreateMemoriesTask(type="create", conversation=data_json))
+        self.extraction_queue.put_nowait(CreateMemoriesTask(conversation=data_json))
 
     def retrieve(self, conversation: str, housekeeping: bool = True) -> list[str]:
         """Retrieve memories based on snippet of conversation"""
@@ -128,7 +126,7 @@ class AIMemory:
 
         # Queue a memory housekeeping task
         if housekeeping:
-            self.housekeeping_queue.put_nowait(MemoryHousekeepingTask(type="housekeeping", memories=memories))
+            self.housekeeping_queue.put_nowait(MemoryHousekeepingTask(memories=memories))
 
         random.shuffle(memories)
         if len(memories) > 8:
@@ -191,6 +189,12 @@ class AIMemory:
         """Detect and resolve memory conflicts and duplicates"""
 
         self.logger.debug("Housekeeping memories")
+
+        # Filter memories against memory store.
+        # (Some may have been removed by previous housekeeping passes)
+        memories = [m for m in memories if m in self.memories]
+        if len(memories) < 2:
+            return
 
         # Convert to JSON
         housekeeping = HousekeepingMemories(
@@ -299,11 +303,9 @@ class AIMemory:
 
         # Find memories
         memory1 = self._get_memory_by_id(id1)
-        if not memory1:
-            return f"ERROR: Memory {id1} not found"
         memory2 = self._get_memory_by_id(id2)
-        if not memory2:
-            return f"ERROR: Memory {id2} not found"
+        if not memory1 or not memory2:
+            return f"{type} reported successfully"      # Report success, otherwise LLM tends to keep trying again
 
         # Check for existing action
         existing_action = next((
@@ -312,7 +314,7 @@ class AIMemory:
             if a.type == type and memory1 in a.memories and memory2 in a.memories
         ), None)
         if existing_action:
-            return f"ERROR: {type} has already been reported"
+            return f"{type} reported successfully"      # Report success, otherwise LLM tends to keep trying again
 
         # Add housekeeping action
         self.housekeeping_actions.append(MemoryHousekeepingAction(type=type, memories=[memory1, memory2]))
