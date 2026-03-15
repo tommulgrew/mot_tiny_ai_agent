@@ -40,3 +40,9 @@
                 results = list(ddgs.text(query, max_results=max_results))
             return results
         ```
+
+[ ] - Short term memory
+
+[ ] - Formalise system event.
+    Accept event "type" parameter.
+    Wrap in "system_event" structure with "type" and "message"

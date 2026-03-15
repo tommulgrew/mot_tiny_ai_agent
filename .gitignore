@@ -218,4 +218,4 @@ __marimo__/
 memory.json
 reminders.json
 log.txt
-completions_log.txt
+*_log.txt

@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 import logging
 from pathlib import Path
 from typing import Any, Literal, Callable
@@ -10,7 +10,6 @@ from ai_client import AIClient
 from ai_agent import AIAgent, AIAgentError
 from ai_tools import AITools
 from speech_input import SpeechToTextInput
-from tools import reminder_tools
 from tools.app_tools import AppTools
 from tools.browser_tools import BrowserTools
 from tools.file_tools import FileTools
@@ -61,6 +60,9 @@ class App:
         if self.config.speech_to_text.enabled:
             self.speech_to_text = SpeechToTextInput(self.config.speech_to_text, inject_callback=self.voice_event)
             self.speech_to_text.start()
+
+        # Periodic timer event
+        asyncio.create_task(self._timer_worker())
 
     def user_input(self, input: str):        
         self._queue_event(UserInputEvent(type="user", input=input))
@@ -122,3 +124,16 @@ class App:
 
     def _get_user_last_active(self) -> datetime:
         return self.agent.user_last_active
+
+    async def _timer_worker(self):
+        while True:
+            # Timer event fires every 15 minutes, if the user has been inactive
+            # for at least 10 minutes
+            await asyncio.sleep(900)
+            if datetime.now() - self.agent.user_last_active >= timedelta(minutes=10):
+                self.system_event({
+                    "system_event": {
+                        "type": "timer",
+                        "message" : "This is a 15-minute periodic timer event"
+                    }
+                })

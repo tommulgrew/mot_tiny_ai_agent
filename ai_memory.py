@@ -13,6 +13,7 @@ import humanize
 from ai_client import AIClient
 from ai_tools import AITools, AITool, AIToolParam
 from config import AgentConfig, MemoryConfig
+from util import create_logger
 
 class AIMemoryPrompts(BaseModel):
     create_memories: str        # Create memories from conversation snippet
@@ -65,7 +66,7 @@ class AIMemory:
     """Basic AI memory service, for extracting and retrieving memories during conversation"""
     
     def __init__(self, client: AIClient, config: MemoryConfig, agent_config: AgentConfig):
-        self.logger = logging.getLogger("tinyagent.memory")
+        self.logger = create_logger("tinyagent.memory", "memory_log.txt")
 
         self.client = client
         self.storage_path = Path(config.storage_path)
@@ -74,7 +75,7 @@ class AIMemory:
         self.id_generator = 0
         self.memories: list[AISavedMemory] = []
         self.housekeeping_actions: list[MemoryHousekeepingAction] = []
-        self.prompts = create_ai_prompts()        
+        self.prompts = create_ai_prompts(agent_config)        
         self.save_tools = self._make_save_memory_tools()
         self.housekeeping_tools = self._make_housekeeping_tools()
         self.dirty = False                  # True if memories need to be saved
@@ -381,9 +382,17 @@ class AIMemory:
         else:
             return False        # User activity information is unavailable. Proceed as if the user is offline.        
 
-def create_ai_prompts() -> AIMemoryPrompts:
+def create_ai_prompts(agent_config: AgentConfig) -> AIMemoryPrompts:
+
+    built_in_knowledge = []
+    if agent_config.users_name:
+        built_in_knowledge.append(f"- The user's name is {agent_config.users_name}")
+    if agent_config.agents_name:
+        built_in_knowledge.append(f"- The AI chatbot's name is {agent_config.agents_name}")
+    built_in_knowledge_str = "\n".join(["The AI chatbot already knows the following facts. Do not record them as memories:", *built_in_knowledge])
+
     return AIMemoryPrompts(
-        create_memories="""\
+        create_memories=f"""\
 You are a *long term* memory service for an AI chatbot.
 
 You will be provided with interactions between the user and the AI chatbot, with some "active memories" for context.
@@ -394,6 +403,8 @@ ONLY capture medium/long term memories, like the user's name, or locations of co
 DO NOT capture memories that will be irrelevant in 30 minutes time.
 DO NOT record "User wants to open Word", or "User wants to search for philosophy quotes" - these are transient tasks, not long term memories.
 DO NOT record information from "active_memories" - these memories have already been recorded.
+
+{built_in_knowledge_str}
 
 The goal is to capture information that will be useful in a later chat session (e.g. tomorrow, or next week).
 If there is no long term information to capture, skip straight to responding with: DONE

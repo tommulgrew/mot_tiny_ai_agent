@@ -63,7 +63,7 @@ class AIAgent:
         new_messages = await self._call_chat_client([ system_info.model_dump_json(), content ])
 
         # Record memories
-        memory_messages = [m for m in new_messages if not self._is_relevant_memories_msg(m)]        
+        memory_messages = [m for m in new_messages if not self._is_system_info_msg(m)]        
         self.memory.create_memories(memory_messages, memories)
 
     async def _call_chat_client(self, user_prompt: list[str] | str) -> list:
@@ -110,10 +110,10 @@ class AIAgent:
         if self.output_callback and output: # and output != "NO_OUTPUT":
             self.output_callback(output)
 
-    def _is_relevant_memories_msg(self, msg) -> bool:
-        return (
-            self.client.is_user_message(msg) and 
-            self.client.get_message_content(msg).strip().startswith("{ relevant_memories:")
+    def _is_system_info_msg(self, msg) -> bool:
+        return(
+            self.client.is_user_message(msg) and
+            self.client.get_message_content(msg).strip().startswith("{\"system_info\":")
         )
 
     def _make_recall_memories_tool(self) -> AITool:
@@ -166,11 +166,15 @@ Output - respond in one of three ways:
 - Always include the same information as text output, as speech may not be heard.
 
 "create_reminder" tool:
-- Use to notify the user of upcoming events.
-- Use to remind yourself of delayed or recurring tasks.
+- Use to notify the user of upcoming events, appointments and tasks.
 - Reminder messages must not contain relative time references such as "tomorrow", "next week", or "on Tuesday".
 - Always use the resolved date and time in the message instead.
 - Example: for "remind me to put the bins out tomorrow at 6PM", create the message "Put the bins out" scheduled for the actual date — NOT "Put the bins out tomorrow".
+
+"timer" system event:
+- You will receive this every 15 minutes when the user is inactive.
+- This event is for you, as the agent.
+- Do not notify the user of this event.
 
 {extra_info_text if extra_info_text else ""}\
 """)

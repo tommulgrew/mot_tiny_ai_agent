@@ -10,7 +10,7 @@ from util import create_logger
 async def main():
 
     # Init logging
-    logger = create_logger("tinyagent", "log.txt", propagate=False)
+    logger = create_logger("tinyagent", "log.txt", level=logging.DEBUG, propagate=False)
     logger.info("Tiny agent started")
 
     # Prompt toolkit session
