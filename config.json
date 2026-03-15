@@ -23,6 +23,26 @@
         "enabled": true,
         "trigger_key": "alt_gr"
     },
+    "email": {
+        "user_inbox": {
+            "imap_host": "imap.example.com",
+            "imap_port": 993,
+            "username": "user@example.com",
+            "password": "your-app-password"
+        },
+        "agent_inbox": {
+            "imap_host": "imap.example.com",
+            "imap_port": 993,
+            "smtp_host": "smtp.example.com",
+            "smtp_port": 587,
+            "username": "agent@example.com",
+            "password": "your-app-password",
+            "send_whitelist": ["trusted@example.com"]
+        },
+        "storage_path": "email_state.json",
+        "max_body_chars": 4000,
+        "poll_interval_seconds": 300
+    },
     "allowed_apps": [
         {
             "name": "Steam",

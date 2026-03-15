@@ -131,6 +131,59 @@
                 }
             }
         },
+        "email": {
+            "type": "object",
+            "additionalProperties": false,
+            "description": "Email tool configuration. Supports a read-only user inbox and a read/write agent inbox.",
+            "properties": {
+                "user_inbox": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "description": "Read-only IMAP inbox for the user's personal email.",
+                    "required": ["imap_host", "username", "password"],
+                    "properties": {
+                        "imap_host": { "type": "string", "description": "IMAP server hostname" },
+                        "imap_port": { "type": "number", "default": 993, "description": "IMAP port (SSL)" },
+                        "username":  { "type": "string", "description": "IMAP login username (usually the email address)" },
+                        "password":  { "type": "string", "description": "IMAP password or app-specific password" }
+                    }
+                },
+                "agent_inbox": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "description": "IMAP/SMTP inbox for the agent. Can send email to addresses in the send_whitelist.",
+                    "required": ["imap_host", "username", "password", "smtp_host"],
+                    "properties": {
+                        "imap_host":      { "type": "string", "description": "IMAP server hostname" },
+                        "imap_port":      { "type": "number", "default": 993, "description": "IMAP port (SSL)" },
+                        "username":       { "type": "string", "description": "IMAP/SMTP login username (usually the email address)" },
+                        "password":       { "type": "string", "description": "IMAP/SMTP password or app-specific password" },
+                        "smtp_host":      { "type": "string", "description": "SMTP server hostname" },
+                        "smtp_port":      { "type": "number", "default": 587, "description": "SMTP port (STARTTLS)" },
+                        "send_whitelist": {
+                            "type": "array",
+                            "description": "Email addresses the agent is permitted to send to.",
+                            "items": { "type": "string" }
+                        }
+                    }
+                },
+                "storage_path": {
+                    "type": "string",
+                    "default": "email_state.json",
+                    "description": "Path to JSON file used to track read emails and polling state."
+                },
+                "max_body_chars": {
+                    "type": "number",
+                    "default": 4000,
+                    "description": "Maximum characters returned per read_email call. Larger emails are truncated with a continuation hint."
+                },
+                "poll_interval_seconds": {
+                    "type": "number",
+                    "default": 300,
+                    "description": "How often (in seconds) to poll inboxes for new emails."
+                }
+            }
+        },
         "allowed_apps": {
             "type": "array",
             "description": "White list of apps the agent is allowed to launch.",

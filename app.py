@@ -12,6 +12,7 @@ from ai_tools import AITools
 from speech_input import SpeechToTextInput
 from tools.app_tools import AppTools
 from tools.browser_tools import BrowserTools
+from tools.email_tools import EmailTools
 from tools.file_tools import FileTools
 from tools.speak_tools import SpeakTools
 from tools.reminder_tools import ReminderTools
@@ -107,12 +108,19 @@ class App:
 
         tools.add(BrowserTools().make_tools())
         if self.config.file_tools:
-            tools.add(FileTools(self.config.file_tools).make_tools())        
+            tools.add(FileTools(self.config.file_tools).make_tools())
         tools.add(SpeakTools().make_tools())
         if self.config.allowed_apps:
             tools.add(AppTools(self.config.allowed_apps).make_tools())
+        if self.config.email:
+            email_tools = EmailTools(self.config.email, self._email_event_callback)
+            asyncio.create_task(email_tools.check_task())
+            tools.add(email_tools.make_tools())
 
         return tools
+
+    def _email_event_callback(self, data: dict):
+        self.system_event(data)
 
     def _reminder_callback(self, message: str):
         self.system_event({

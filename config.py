@@ -40,6 +40,25 @@ class AppConfig(BaseModel):
     path: str
     description: str | None = None
 
+# Email tools config
+class ImapConfig(BaseModel):
+    imap_host: str
+    imap_port: int = 993
+    username: str
+    password: str
+
+class AgentInboxConfig(ImapConfig):
+    smtp_host: str
+    smtp_port: int = 587
+    send_whitelist: list[str] = []
+
+class EmailConfig(BaseModel):
+    user_inbox: ImapConfig | None = None
+    agent_inbox: AgentInboxConfig | None = None
+    storage_path: str = "email_state.json"
+    max_body_chars: int = 4000
+    poll_interval_seconds: int = 300
+
 class Config(BaseModel):
     """Main configuration"""
     model: ModelConfig                      # LLM model configuration
@@ -48,6 +67,7 @@ class Config(BaseModel):
     agent: AgentConfig
     speech_to_text: SpeechToTextConfig
     allowed_apps: list[AppConfig] | None = None
+    email: EmailConfig | None = None
 
 def load_config(path: str) -> Config:
     with open(path, encoding="utf-8") as f:
