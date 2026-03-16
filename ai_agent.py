@@ -90,7 +90,7 @@ class AIAgent:
                 return new_messages
             
             except BadRequestError as e:
-                if "Context size has been exceeded" not in str(e):
+                if "Context size has been exceeded" not in str(e) and "The number of tokens to keep from the initial prompt is greater than the context length" not in str(e):
                     raise
 
                 # Context size exceeded - Trim message history and try again
