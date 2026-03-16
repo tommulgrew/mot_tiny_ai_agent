@@ -23,12 +23,25 @@ from config import AgentInboxConfig, EmailConfig, ImapConfig
 # HTML stripping
 # ---------------------------------------------------------------------------
 
+_SUPPRESS_TAGS = {"style", "script"}
+
 class _HTMLStripper(HTMLParser):
     def __init__(self):
         super().__init__()
         self._parts: list[str] = []
+        self._suppress_depth: int = 0
+
+    def handle_starttag(self, tag: str, attrs) -> None:
+        if tag in _SUPPRESS_TAGS:
+            self._suppress_depth += 1
+
+    def handle_endtag(self, tag: str) -> None:
+        if tag in _SUPPRESS_TAGS and self._suppress_depth > 0:
+            self._suppress_depth -= 1
 
     def handle_data(self, data: str) -> None:
+        if self._suppress_depth > 0:
+            return
         stripped = data.strip()
         if stripped:
             self._parts.append(stripped)
