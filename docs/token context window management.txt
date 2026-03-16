@@ -32,3 +32,12 @@ Use this:
 * Immediately before a chat completions call - to calculate expected prompt 
 size, and determine whether to trim.
 * During trimming to adjust the estimated token context size after each trim.
+
+
+
+Need to be aware of batches of messages when trimming.
+
+Pattern is: user [assistant tool]* assistant?
+
+Trim oldest [assistant tool] pairs until non are left. Then remove user and 
+trailing assistant message if any.

@@ -4,7 +4,7 @@ from openai.types.chat.chat_completion_tool_param import FunctionDefinition
 from typing import Callable, Iterable, cast
 from ai_tools import AIToolError, AITools, AITool
 from config import ModelConfig
-from openai import AsyncClient, BaseModel
+from openai import AsyncClient, BadRequestError, BaseModel
 from openai.types.chat import ChatCompletionMessageParam, ChatCompletionAssistantMessageParam, ChatCompletionSystemMessageParam, ChatCompletionMessageToolCallParam, ChatCompletionFunctionToolParam, ChatCompletionToolMessageParam, ChatCompletionUserMessageParam
 from util import create_logger, log_dump
 
@@ -59,13 +59,14 @@ class AIChatMessageHistory(BaseModel):
         # Determine number of messages to remove.
         # Must be sure not to split a tool call/response pair.
         count = 2 if len(self.messages) > 1 and self.messages[1].get("role", "") == "tool" else 1
-        if len(self.messages) < count:
+        if len(self.messages) <= count:
             return False
         
         # Remove messages and adjust estimated token count
         while count > 0:
-            self.token_count += estimate_tokens(self.messages[0])
+            self.token_count -= estimate_tokens(self.messages[0])
             self.messages.remove(self.messages[0])
+            count -= 1
         
         return True
 
@@ -92,6 +93,7 @@ class AIClient:
             history: AIChatMessageHistory | None = None,
             tools: AITools | None = None,
             strip_think: bool = True,
+            retry_on_context_full: bool = False,
             output_callback: Callable[[str], None] | None = None) -> AIChatResponse:
         """Call the chat completions API, resolve any tool calls and return the new messages generated"""
 
@@ -140,11 +142,21 @@ class AIClient:
             self.chat_logger.debug("Chat API request: %s", log_dump([ system_message, *history.messages ]))            
 
             # Call chat completion service
-            response = await self.client.chat.completions.create(
-                    messages=[ system_message, *history.messages], 
-                    model=self.config.name,
-                    tools=completion_tools
-                )
+            response = None
+            while not response:
+                try:
+                    response = await self.client.chat.completions.create(
+                            messages=[ system_message, *history.messages], 
+                            model=self.config.name,
+                            tools=completion_tools
+                        )
+                except BadRequestError as e:
+                    if "Context size has been exceeded" not in str(e) and "The number of tokens to keep from the initial prompt is greater than the context length" not in str(e):
+                        raise
+
+                    # Trim history and retry
+                    if not retry_on_context_full or not history.trim():
+                        raise AIClientError("Token context overflowed.")
 
             self.chat_logger.debug("Chat API response: %s", log_dump(response))            
 
@@ -156,13 +168,17 @@ class AIClient:
             # Cast tool calls to param tool calls (to keep Pyright happy - objects have identical fields)
             tool_call_params = cast(list[ChatCompletionMessageToolCallParam], msg.tool_calls) if msg else []
 
-            # Add assistant message to conversation (*with* thinking, so thought chain isn't broken across tool calls)
+            # Add assistant message to conversation (*with* thinking, so thought chain isn't broken across tool calls)            
             assistant_message = ChatCompletionAssistantMessageParam(
                 role="assistant",
                 content=content,
                 tool_calls=tool_call_params
             )
             history.add([assistant_message])
+
+            # Use actual token count if available
+            if response.usage:
+                history.token_count = response.usage.total_tokens
 
             # Determine new message to return and callback content
             if strip_think and content != None:

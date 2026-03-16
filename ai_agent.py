@@ -6,7 +6,7 @@ from typing import Callable
 import humanize
 from openai import BadRequestError
 from pydantic import BaseModel
-from ai_client import AIClient
+from ai_client import AIChatMessageHistory, AIClient
 from ai_tools import AITool, AITools, AIToolParam
 from ai_memory import AIMemory
 from config import AgentConfig, MemoryConfig
@@ -37,7 +37,7 @@ class AIAgent:
             self.tools.add([self._make_recall_memories_tool()])
         self.output_callback = output_callback
         self.prompts = create_ai_prompts(users_name=config.users_name, agents_name=config.agents_name, extra_info=config.extra_info)
-        self.message_history = deque(maxlen=20)
+        self.message_history = AIChatMessageHistory()
         self.user_last_active = datetime.now()
 
     async def process_user_message(self, message: str):
@@ -67,44 +67,22 @@ class AIAgent:
         self.memory.create_memories(memory_messages, memories)
 
     async def _call_chat_client(self, user_prompt: list[str] | str) -> list:
-        # Retry until call completes without context overflowing.
-        # (Removing history messages as necessary)
-        while True:
-            try:
-                # Call client
-                new_messages, stats = await self.client.chat(
-                    system_prompt=self.prompts.main,
-                    user_prompt=user_prompt,
-                    message_history=self.message_history,
-                    tools=self.tools,
-                    output_callback=self._filter_output
-                )
 
-                # Add to history
-                self.message_history.extend(new_messages)
+        # Call client
+        chat_response = await self.client.chat(
+            system_prompt=self.prompts.main,
+            user_prompt=user_prompt,
+            history=self.message_history,
+            tools=self.tools,
+            output_callback=self._filter_output,
+            retry_on_context_full=True
+        )
 
-                # Trim history if prompt size exceeds limit
-                if stats and stats.prompt_tokens + stats.completion_tokens > self.config.prompt_limit:
-                    self._trim_message_history()
+        # Preserve history
+        self.message_history = chat_response.history
 
-                return new_messages
-            
-            except BadRequestError as e:
-                if "Context size has been exceeded" not in str(e) and "The number of tokens to keep from the initial prompt is greater than the context length" not in str(e):
-                    raise
-
-                # Context size exceeded - Trim message history and try again
-                if self.message_history:
-                    self.logger.warning("Context size exceeded. Trimming history and retrying.")
-                    self._trim_message_history()
-                else:
-                    raise AIAgentError("Context size exceeded. Cannot recover.")
-
-    def _trim_message_history(self):
-        # Remove 3 oldest messages
-        for _ in range(0, 3):
-            if self.message_history:
-                self.message_history.pop()
+        return chat_response.new_messages
+    
 
     def _filter_output(self, output: str):
         if self.output_callback and output: # and output != "NO_OUTPUT":
