@@ -217,5 +217,6 @@ __marimo__/
 
 memory.json
 reminders.json
+email_state.json
 log.txt
 *_log.txt

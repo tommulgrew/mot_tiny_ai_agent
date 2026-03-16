@@ -1,5 +1,6 @@
 import asyncio
 import email as email_lib
+import getpass
 import imaplib
 import json
 import logging
@@ -11,6 +12,8 @@ from email.utils import parsedate_to_datetime
 from html.parser import HTMLParser
 from pathlib import Path
 from typing import Callable, Generator
+
+import keyring
 
 from ai_tools import AITool, AIToolError, AIToolParam
 from config import AgentInboxConfig, EmailConfig, ImapConfig
@@ -107,11 +110,31 @@ def _extract_body(msg: email_lib.message.Message) -> str:
 # IMAP connection
 # ---------------------------------------------------------------------------
 
+_KEYRING_SERVICE = "tinyagent"
+
+
+def _resolve_password(config: ImapConfig, label: str) -> str:
+    """Return the password for an inbox, prompting and storing via keyring if not set."""
+    if config.password:
+        return config.password
+
+    password = keyring.get_password(_KEYRING_SERVICE, config.username)
+    if password:
+        return password
+
+    # Not in keyring — prompt the user once and store it
+    print(f"No password found for {label} ({config.username}).")
+    password = getpass.getpass(f"Enter password for {config.username}: ")
+    keyring.set_password(_KEYRING_SERVICE, config.username, password)
+    print(f"Password stored in keyring for {config.username}.")
+    return password
+
+
 @contextmanager
-def _imap_connect(config: ImapConfig) -> Generator[imaplib.IMAP4_SSL, None, None]:
+def _imap_connect(config: ImapConfig, password: str) -> Generator[imaplib.IMAP4_SSL, None, None]:
     imap = imaplib.IMAP4_SSL(config.imap_host, config.imap_port)
     try:
-        imap.login(config.username, config.password)
+        imap.login(config.username, password)
         imap.select("INBOX")
         yield imap
     finally:
@@ -187,6 +210,13 @@ class EmailTools:
         self.event_callback = event_callback
         self.logger = logging.getLogger("tinyagent.email")
         self._state = _EmailState(Path(config.storage_path))
+
+        # Resolve passwords at startup (prompts if not in keyring)
+        self._passwords: dict[str, str] = {}
+        if config.user_inbox:
+            self._passwords["user"] = _resolve_password(config.user_inbox, "user inbox")
+        if config.agent_inbox:
+            self._passwords["agent"] = _resolve_password(config.agent_inbox, "agent inbox")
 
     def make_tools(self) -> list[AITool]:
         tools: list[AITool] = []
@@ -265,8 +295,10 @@ class EmailTools:
     async def _list_emails(self, inbox: str) -> str:
         config = self._get_inbox_config(inbox)
 
+        password = self._passwords[inbox]
+
         def _run() -> str:
-            with _imap_connect(config) as imap:
+            with _imap_connect(config, password) as imap:
                 all_uids = _search_uids(imap)
                 if not all_uids:
                     return "No emails found."
@@ -306,9 +338,11 @@ class EmailTools:
         except ValueError:
             raise AIToolError(f"Invalid email ID '{id}'.")
 
+        password = self._passwords[inbox]
+
         def _run() -> str:
             uid_bytes = str(uid).encode()
-            with _imap_connect(config) as imap:
+            with _imap_connect(config, password) as imap:
                 typ, data = imap.uid("fetch", uid_bytes, "(BODY.PEEK[])")  # type: ignore[arg-type]
                 if typ != "OK" or not data or not isinstance(data[0], tuple):
                     raise AIToolError(f"Email {id} not found.")
@@ -353,6 +387,8 @@ class EmailTools:
                 f"'{to}' is not in the send whitelist. Permitted recipients: {permitted}."
             )
 
+        password = self._passwords["agent"]
+
         def _run() -> None:
             msg = MIMEText(body, "plain", "utf-8")
             msg["From"] = cfg.username
@@ -360,7 +396,7 @@ class EmailTools:
             msg["Subject"] = subject
             with smtplib.SMTP(cfg.smtp_host, cfg.smtp_port) as smtp:
                 smtp.starttls()
-                smtp.login(cfg.username, cfg.password)
+                smtp.login(cfg.username, password)
                 smtp.send_message(msg)
 
         try:
@@ -375,8 +411,10 @@ class EmailTools:
     # ------------------------------------------------------------------
 
     async def _poll_inbox(self, inbox_name: str, inbox_config: ImapConfig) -> None:
+        password = self._passwords[inbox_name]
+
         def _get_uids() -> list[int]:
-            with _imap_connect(inbox_config) as imap:
+            with _imap_connect(inbox_config, password) as imap:
                 return _search_uids(imap)
 
         all_uids = await asyncio.get_running_loop().run_in_executor(None, _get_uids)

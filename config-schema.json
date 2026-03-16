@@ -140,24 +140,24 @@
                     "type": "object",
                     "additionalProperties": false,
                     "description": "Read-only IMAP inbox for the user's personal email.",
-                    "required": ["imap_host", "username", "password"],
+                    "required": ["imap_host", "username"],
                     "properties": {
                         "imap_host": { "type": "string", "description": "IMAP server hostname" },
                         "imap_port": { "type": "number", "default": 993, "description": "IMAP port (SSL)" },
                         "username":  { "type": "string", "description": "IMAP login username (usually the email address)" },
-                        "password":  { "type": "string", "description": "IMAP password or app-specific password" }
+                        "password":  { "type": "string", "description": "IMAP password or app-specific password. If omitted, the password is looked up from the OS keyring (Windows Credential Manager on Windows), and the user is prompted to enter it on first run." }
                     }
                 },
                 "agent_inbox": {
                     "type": "object",
                     "additionalProperties": false,
                     "description": "IMAP/SMTP inbox for the agent. Can send email to addresses in the send_whitelist.",
-                    "required": ["imap_host", "username", "password", "smtp_host"],
+                    "required": ["imap_host", "username", "smtp_host"],
                     "properties": {
                         "imap_host":      { "type": "string", "description": "IMAP server hostname" },
                         "imap_port":      { "type": "number", "default": 993, "description": "IMAP port (SSL)" },
                         "username":       { "type": "string", "description": "IMAP/SMTP login username (usually the email address)" },
-                        "password":       { "type": "string", "description": "IMAP/SMTP password or app-specific password" },
+                        "password":       { "type": "string", "description": "IMAP/SMTP password or app-specific password. If omitted, the password is looked up from the OS keyring (Windows Credential Manager on Windows), and the user is prompted to enter it on first run." },
                         "smtp_host":      { "type": "string", "description": "SMTP server hostname" },
                         "smtp_port":      { "type": "number", "default": 587, "description": "SMTP port (STARTTLS)" },
                         "send_whitelist": {

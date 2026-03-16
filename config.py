@@ -45,7 +45,7 @@ class ImapConfig(BaseModel):
     imap_host: str
     imap_port: int = 993
     username: str
-    password: str
+    password: str | None = None     # If omitted, resolved from OS keyring at startup
 
 class AgentInboxConfig(ImapConfig):
     smtp_host: str

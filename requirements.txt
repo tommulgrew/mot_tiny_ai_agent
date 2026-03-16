@@ -7,3 +7,4 @@ humanize
 faster_whisper
 sounddevice
 pynput
+keyring
