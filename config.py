@@ -7,6 +7,7 @@ class ModelConfig(BaseModel):
     name: str                               # Model name
     url: str = "http://localhost:1234/v1"   # URL to chat completions service. (Default is LM Studio default endpoint)
     api_key: str = "[not used]"
+    prompt_token_limit: int = 10000
 
 # File tools config
 class FolderConfig(BaseModel):
@@ -26,7 +27,6 @@ class AgentConfig(BaseModel):
     users_name: str | None = None
     agents_name: str | None = None
     extra_info: list[str] | None = None
-    prompt_limit: int = 2000
 
 class SpeechToTextConfig(BaseModel):
     enabled: bool = False

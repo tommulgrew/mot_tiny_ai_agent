@@ -26,6 +26,10 @@
                     "type": "string",
                     "description": "API key, if required",
                     "default": "[not used]"
+                },
+                "prompt_token_limit": {
+                    "type": "number",
+                    "description": "Prompt size limit in tokens. History messages will be removed once limit is reached."
                 }
             },
             "required":["name"]
@@ -81,10 +85,6 @@
             "type": "object",
             "additionalProperties": false,
             "properties": {
-                "prompt_limit": {
-                    "type": "number",
-                    "description": "Prompt size limit in tokens. History messages will be removed once limit is reached."
-                },
                 "users_name": {
                     "type": "string",
                     "description": "The user's name"

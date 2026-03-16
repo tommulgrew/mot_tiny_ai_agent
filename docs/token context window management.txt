@@ -1,0 +1,34 @@
+Context window trimming:
+========================
+
+Need to find out what the template error is about. Does this affect where/how messages can be split?
+
+Tiered:
+
+1. Truncate tool call results for historical messages.
+2. Remove historical system info messages.
+3. Remove oldest historical message(s).
+    Never split tool call/response pairs.
+
+Ideally want to perform trimming during client loop, so that long loops don't 
+kill the context window.
+However, this raises the question of who owns the historical messages, as 
+currently those are managed by the agent.
+
+Perhaps the client manages all context trimming, but passes the full message 
+history back to the caller. Processes that need to keep history (such as the 
+agent) can persist the historical messages and pass them back in the next call.
+Processes that don't (like the memory service) can discard them.
+New messages should be passed in a separate return value, so that the caller can
+easily isolate them for any further processing.
+
+Estimate the tokens in each message (chars/4).
+
+Historical messages should also include the token counts (from the completions 
+call), which should be passed back to the chat client, so that it can estimate
+the tokens required.
+
+Use this:
+* Immediately before a chat completions call - to calculate expected prompt 
+size, and determine whether to trim.
+* During trimming to adjust the estimated token context size after each trim.

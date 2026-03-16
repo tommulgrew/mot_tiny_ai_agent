@@ -1,7 +1,8 @@
 {
     "$schema": "config-schema.json",
     "model": {
-        "name": "qwen/qwen3.5-9b"
+        "name": "qwen/qwen3.5-9b",
+        "prompt_token_limit": 2500
     },
     "file_tools": {
         "folders": [
@@ -16,8 +17,7 @@
     "agent": {
         "users_name": "Tom",
         "agents_name": "Alfred",
-        "extra_info": [],
-        "prompt_limit": 3500
+        "extra_info": []
     },
     "speech_to_text": {
         "enabled": true,
