@@ -51,6 +51,20 @@ class AIChatMessageHistory(BaseModel):
         # Adjust estimated token count
         self.token_count += estimate_tokens_list(messages)
 
+    def remove(self, messages: Iterable[ChatCompletionMessageParam]):
+        for msg in messages:
+            self.messages.remove(msg)
+
+            # Adjust estimated token count
+            self.token_count -= estimate_tokens(msg)
+
+    def set_content(self, idx: int, content: str):
+        message = self.messages[idx]
+        prev_message_tokens = estimate_tokens(message)
+        message["content"] = content
+        new_message_tokens = estimate_tokens(message)
+        self.token_count = self.token_count - prev_message_tokens + new_message_tokens
+
     def trim_to_limit(self, token_limit: int) -> bool:
         while self.token_count > token_limit:
             if not self.trim():
@@ -103,7 +117,7 @@ class AIChatMessageHistory(BaseModel):
         return groups
 
     def _get_trim_tokens_op_type(self, group: AIChatMessageGroup) -> TrimTokensOpType:
-        group_messages = self.messages[group.start_index:group.start_index + group.message_count]
+        group_messages = self._group_messages(group)
 
         if self._group_has_think_block(group_messages):
             return TrimTokensOpType.STRIP_THINK
@@ -116,6 +130,9 @@ class AIChatMessageHistory(BaseModel):
 
         else:
             return TrimTokensOpType.REMOVE_GROUP
+
+    def _group_messages(self, group: AIChatMessageGroup) -> list[ChatCompletionMessageParam]:
+        return self.messages[group.start_index:group.start_index + group.message_count]
 
     def _do_trim_op(self, op: TrimTokensOp):
 
@@ -144,7 +161,13 @@ class AIChatMessageHistory(BaseModel):
         return False            # TODO
 
     def _strip_think_blocks(self, group: AIChatMessageGroup):
-        raise Exception("Not implemented")      # TODO
+        group_messages = self._group_messages(group)
+        think_open = False
+        for i, msg in enumerate(group_messages):
+            if _is_assistant_message(msg):
+                content = _get_message_content(msg)
+                content, think_open = strip_think_block(content, think_open)
+                self.set_content(group.start_index + i, content)
 
     def _remove_sys_info(self, group: AIChatMessageGroup):
         raise Exception("Not implemented")      # TODO
@@ -153,7 +176,8 @@ class AIChatMessageHistory(BaseModel):
         raise Exception("Not implemented")      # TODO
 
     def _remove_group(self, group: AIChatMessageGroup):
-        raise Exception("Not implemented")      # TODO
+        group_messages = self._group_messages(group)
+        self.remove(group_messages)
 
 class AIChatResponse(BaseModel):
     new_messages: list[ChatCompletionMessageParam]
