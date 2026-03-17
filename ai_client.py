@@ -1,3 +1,4 @@
+from enum import Enum
 import json
 from dataclasses import field
 from openai.types.chat.chat_completion_tool_param import FunctionDefinition
@@ -11,7 +12,36 @@ from util import create_logger, log_dump
 class AIClientError(Exception):
     """General AI chat completion client error"""
 
+class TrimTokensOpType(int, Enum):
+    STRIP_THINK = 0
+    REMOVE_SYS_INFO = 1
+    TRUNCATE_TOOL_RESULTS = 2
+    REMOVE_GROUP = 3
+
+_recover_tokens_op_weights = [0.1, 0.25, 0.4, 1.0]
+_recover_tokens_age_weights = [1.0, 0.6, 0.4, 0.3, 0.2, 0.1]
+
+class AIChatMessageGroup(BaseModel):
+    start_index: int
+    message_count: int
+    user_message_count: int
+
+class TrimTokensOp(BaseModel):
+    group: AIChatMessageGroup
+    age: int                    # 0 = newest
+    op_type: TrimTokensOpType
+
+    def get_weight(self) -> float:
+        op_weight = _recover_tokens_op_weights[self.op_type]
+        age_weight = (
+            _recover_tokens_age_weights[self.age] 
+            if self.age < len(_recover_tokens_age_weights) 
+            else _recover_tokens_age_weights[-1]
+        )
+        return op_weight * age_weight
+
 class AIChatMessageHistory(BaseModel):
+    """Stores chat message history, and manages trimming to recover tokens"""
     messages: list[ChatCompletionMessageParam] = field(default_factory=list)
     token_count: int = 0
 
@@ -21,20 +51,6 @@ class AIChatMessageHistory(BaseModel):
         # Adjust estimated token count
         self.token_count += estimate_tokens_list(messages)
 
-    def replace_end_messages(self, new_messages: list[ChatCompletionMessageParam]):
-        assert(len(new_messages) <= len(self.messages))
-
-        # Split
-        split_point = len(self.messages) - len(new_messages)
-        before = self.messages[:split_point]
-        after = self.messages[split_point:]
-
-        # Replace
-        self.messages = [*before, *new_messages]
-
-        # Adjust estimated token count
-        self.token_count = self.token_count - estimate_tokens_list(after) + estimate_tokens_list(new_messages)        
-
     def trim_to_limit(self, token_limit: int) -> bool:
         while self.token_count > token_limit:
             if not self.trim():
@@ -42,33 +58,102 @@ class AIChatMessageHistory(BaseModel):
         return True
 
     def trim(self) -> bool:
-        return self.truncate_tool_results() or self.prune_system_info() or self.discard_oldest()
 
-    def truncate_tool_results(self) -> bool:
-        # TO DO
-        return False
-
-    def prune_system_info(self) -> bool:
-        # TO DO
-        return False
-
-    def discard_oldest(self) -> bool:
-        if not self.messages:
+        # Split messages into groups. Exclude last group, as we cannot trim tokens
+        # from the current active group.
+        groups = self._get_groups()[:-1]
+        if not groups:
             return False
 
-        # Determine number of messages to remove.
-        # Must be sure not to split a tool call/response pair.
-        count = 2 if len(self.messages) > 1 and self.messages[1].get("role", "") == "tool" else 1
-        if len(self.messages) <= count:
-            return False
-        
-        # Remove messages and adjust estimated token count
-        while count > 0:
-            self.token_count -= estimate_tokens(self.messages[0])
-            self.messages.remove(self.messages[0])
-            count -= 1
-        
+        # Create token trim operations for each group
+        ops = [ 
+            TrimTokensOp(
+                group=g, 
+                age=len(groups) - idx - 1, 
+                op_type=self._get_trim_tokens_op_type(g)
+            ) 
+            for idx, g in enumerate(groups)
+        ]
+
+        # Sort by weight
+        ops.sort(key=lambda x: x.get_weight())
+
+        # Apply lowest weighted operation
+        self._do_trim_op(ops[0])
         return True
+
+    def _get_groups(self) -> list[AIChatMessageGroup]:
+        groups = []
+        i = 0
+        user_message_count = 0
+        while i < len(self.messages):
+            start = i
+
+            # User messages
+            while i < len(self.messages) and _is_user_message(self.messages[i]):
+                i += 1
+                user_message_count += 1
+
+            # Assistant and tool messages
+            while i < len(self.messages) and not _is_user_message(self.messages[i]):
+                i += 1
+            
+            groups.append(AIChatMessageGroup(start_index=start, user_message_count=user_message_count, message_count=i - start))
+        
+        return groups
+
+    def _get_trim_tokens_op_type(self, group: AIChatMessageGroup) -> TrimTokensOpType:
+        group_messages = self.messages[group.start_index:group.start_index + group.message_count]
+
+        if self._group_has_think_block(group_messages):
+            return TrimTokensOpType.STRIP_THINK
+        
+        elif self._group_has_sys_info(group_messages):
+            return TrimTokensOpType.REMOVE_SYS_INFO
+
+        elif self._group_has_untruncated_tools(group_messages):
+            return TrimTokensOpType.TRUNCATE_TOOL_RESULTS
+
+        else:
+            return TrimTokensOpType.REMOVE_GROUP
+
+    def _do_trim_op(self, op: TrimTokensOp):
+
+        if (op.op_type == TrimTokensOpType.STRIP_THINK):
+            self._strip_think_blocks(op.group)
+
+        elif (op.op_type == TrimTokensOpType.REMOVE_SYS_INFO):
+            self._remove_sys_info(op.group)
+
+        elif (op.op_type == TrimTokensOpType.TRUNCATE_TOOL_RESULTS):
+            self._truncate_tool_results(op.group)
+
+        elif (op.op_type == TrimTokensOpType.REMOVE_GROUP):
+            self._remove_group(op.group)
+
+    def _group_has_think_block(self, messages: list[ChatCompletionMessageParam]) -> bool:
+        return any(
+            _is_assistant_message(m) and "<think>" in _get_message_content(m) 
+            for m in messages
+        )
+
+    def _group_has_sys_info(self, messages: list[ChatCompletionMessageParam]) -> bool:
+        return False            # TODO
+
+    def _group_has_untruncated_tools(self, messages: list[ChatCompletionMessageParam]) -> bool:
+        return False            # TODO
+
+    def _strip_think_blocks(self, group: AIChatMessageGroup):
+        raise Exception("Not implemented")      # TODO
+
+    def _remove_sys_info(self, group: AIChatMessageGroup):
+        raise Exception("Not implemented")      # TODO
+
+    def _truncate_tool_results(self, group: AIChatMessageGroup):
+        raise Exception("Not implemented")      # TODO
+
+    def _remove_group(self, group: AIChatMessageGroup):
+        raise Exception("Not implemented")      # TODO
 
 class AIChatResponse(BaseModel):
     new_messages: list[ChatCompletionMessageParam]
@@ -215,16 +300,6 @@ class AIClient:
 
             # If not a tool call, we are finished
             if choice.finish_reason != 'tool_calls':
-
-                # Get actual token count if available
-                if response.usage:
-                    history.token_count = response.usage.total_tokens
-
-                # Discard think blocks after call completes, by replacing 
-                # last messages with new_message objects
-                if strip_think:
-                    history.replace_end_messages(new_messages)
-
                 return AIChatResponse(history=history, new_messages=new_messages)
 
             # Call tools
@@ -259,11 +334,20 @@ class AIClient:
         return "\n\n".join(f"[{m['role'].upper()}]:\n{m.get('content') or ''}" for m in messages)
 
     def is_user_message(self, message: ChatCompletionMessageParam) -> bool:
-        return message['role'] == "user"
+        return _is_user_message(message)
 
     def get_message_content(self, message: ChatCompletionMessageParam) -> str:
-        content = message.get('content')
-        return content if isinstance(content, str) else ""
+        return _get_message_content(message)
+
+def _is_user_message(message: ChatCompletionMessageParam) -> bool:
+    return message.get('role', '') == "user"
+
+def _is_assistant_message(message: ChatCompletionMessageParam) -> bool:
+    return message.get('role', '') == "assistant"
+
+def _get_message_content(message: ChatCompletionMessageParam) -> str:
+    content = message.get('content')
+    return content if isinstance(content, str) else ""
 
 def make_chat_completion_tool(tool: AITool) -> ChatCompletionFunctionToolParam:
     
