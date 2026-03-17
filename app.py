@@ -6,8 +6,8 @@ from openai import BaseModel
 from ai_memory import AIMemory
 from config import load_config
 import asyncio
-from ai_client import AIClient
-from ai_agent import AIAgent, AIAgentError
+from ai_client import AIClient, AIClientError, AIClientTokenOverflowError
+from ai_agent import AIAgent
 from ai_tools import AITools
 from speech_input import SpeechToTextInput
 from tools.app_tools import AppTools
@@ -92,8 +92,8 @@ class App:
                 elif event.type == "system":
                     await self.agent.process_system_event(event.data)
             
-            except AIAgentError as e:
-                self.logger.error(f"Agent error: {str(e)}")
+            except AIClientError as e:
+                self.logger.error(f"AI client error: {str(e)}")
 
             finally:
                 # Event done

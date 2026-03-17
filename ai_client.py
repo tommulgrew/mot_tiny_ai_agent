@@ -12,14 +12,17 @@ from util import create_logger, log_dump
 class AIClientError(Exception):
     """General AI chat completion client error"""
 
+class AIClientTokenOverflowError(AIClientError):
+    """Raised when token context overflows and the client cannot recover"""
+
 class TrimTokensOpType(int, Enum):
     STRIP_THINK = 0
     REMOVE_SYS_INFO = 1
     TRUNCATE_TOOL_RESULTS = 2
     REMOVE_GROUP = 3
 
-_recover_tokens_op_weights = [0.1, 0.25, 0.4, 1.0]
-_recover_tokens_age_weights = [1.0, 0.6, 0.4, 0.3, 0.2, 0.1]
+TRIM_TOKENS_OP_WEIGHTS = [0.1, 0.25, 0.4, 1.0]
+TRIM_TOKENS_AGE_WEIGHTS = [1.0, 0.6, 0.4, 0.3, 0.2, 0.1]
 
 class AIChatMessageGroup(BaseModel):
     start_index: int
@@ -32,11 +35,11 @@ class TrimTokensOp(BaseModel):
     op_type: TrimTokensOpType
 
     def get_weight(self) -> float:
-        op_weight = _recover_tokens_op_weights[self.op_type]
+        op_weight = TRIM_TOKENS_OP_WEIGHTS[self.op_type]
         age_weight = (
-            _recover_tokens_age_weights[self.age] 
-            if self.age < len(_recover_tokens_age_weights) 
-            else _recover_tokens_age_weights[-1]
+            TRIM_TOKENS_AGE_WEIGHTS[self.age] 
+            if self.age < len(TRIM_TOKENS_AGE_WEIGHTS) 
+            else TRIM_TOKENS_AGE_WEIGHTS[-1]
         )
         return op_weight * age_weight
 
@@ -289,7 +292,7 @@ class AIClient:
 
                     # Trim history and retry
                     if not retry_on_context_full or not history.trim(is_system_info_callback):
-                        raise AIClientError("Token context overflowed.")
+                        raise AIClientTokenOverflowError("Token context overflowed.")
 
             self.chat_logger.debug("Chat API response: %s", log_dump(response))            
 

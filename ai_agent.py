@@ -6,7 +6,7 @@ from typing import Callable
 import humanize
 from openai import BadRequestError
 from pydantic import BaseModel
-from ai_client import AIChatMessageHistory, AIClient
+from ai_client import AIChatMessageHistory, AIClient, AIClientError
 from ai_tools import AITool, AITools, AIToolParam
 from ai_memory import AIMemory
 from config import AgentConfig, MemoryConfig
@@ -21,9 +21,6 @@ class AgentSystemInfo(BaseModel):
 
 class AgentSystemInfoMessage(BaseModel):
     system_info: AgentSystemInfo
-
-class AIAgentError(Exception):
-    """General agent errors"""
 
 class AIAgent:
     """A basic autonomous AI agent"""
@@ -69,15 +66,21 @@ class AIAgent:
     async def _call_chat_client(self, user_prompt: list[str] | str) -> list:
 
         # Call client
-        chat_response = await self.client.chat(
-            system_prompt=self.prompts.main,
-            user_prompt=user_prompt,
-            history=self.message_history,
-            tools=self.tools,
-            output_callback=self._filter_output,
-            is_system_info_callback=self._is_system_info_content,
-            retry_on_context_full=True
-        )
+        try:
+            chat_response = await self.client.chat(
+                system_prompt=self.prompts.main,
+                user_prompt=user_prompt,
+                history=self.message_history,
+                tools=self.tools,
+                output_callback=self._filter_output,
+                is_system_info_callback=self._is_system_info_content,
+                retry_on_context_full=True
+            )
+
+        except AIClientError as e:
+            if self.output_callback:
+                self.output_callback(f"AI Client error: {str(e)}")
+            raise
 
         # Preserve history
         self.message_history = chat_response.history

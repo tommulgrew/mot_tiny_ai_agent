@@ -2,7 +2,7 @@
     "$schema": "config-schema.json",
     "model": {
         "name": "qwen/qwen3.5-9b",
-        "prompt_token_limit": 3000
+        "prompt_token_limit": 11000
     },
     "file_tools": {
         "folders": [
