@@ -75,6 +75,7 @@ class AIAgent:
             history=self.message_history,
             tools=self.tools,
             output_callback=self._filter_output,
+            is_system_info_callback=self._is_system_info_content,
             retry_on_context_full=True
         )
 
@@ -91,8 +92,11 @@ class AIAgent:
     def _is_system_info_msg(self, msg) -> bool:
         return(
             self.client.is_user_message(msg) and
-            self.client.get_message_content(msg).strip().startswith("{\"system_info\":")
+            self._is_system_info_content(self.client.get_message_content(msg))
         )
+
+    def _is_system_info_content(self, content: str) -> bool:
+        return content.strip().startswith("{\"system_info\":")
 
     def _make_recall_memories_tool(self) -> AITool:
         return AITool(
