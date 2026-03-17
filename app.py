@@ -16,6 +16,7 @@ from tools.email_tools import EmailTools
 from tools.file_tools import FileTools
 from tools.speak_tools import SpeakTools
 from tools.reminder_tools import ReminderTools
+from tools.todo_tools import TodoTools
 
 class UserInputEvent(BaseModel):
     type: Literal["user"]
@@ -116,6 +117,8 @@ class App:
             email_tools = EmailTools(self.config.email, self._email_event_callback)
             asyncio.create_task(email_tools.check_task())
             tools.add(email_tools.make_tools())
+        if self.config.todo:
+            tools.add(TodoTools(self.config.todo).make_tools())
 
         return tools
 

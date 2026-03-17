@@ -40,6 +40,13 @@ class AppConfig(BaseModel):
     path: str
     description: str | None = None
 
+# Todo tools config
+class TodoConfig(BaseModel):
+    storage_path: str = "tasks.json"
+    completed_log_path: str = "tasks_completed.jsonl"
+    agent_list_limit: int = 20
+    user_list_limit: int = 50
+
 # Email tools config
 class ImapConfig(BaseModel):
     imap_host: str
@@ -68,6 +75,7 @@ class Config(BaseModel):
     speech_to_text: SpeechToTextConfig
     allowed_apps: list[AppConfig] | None = None
     email: EmailConfig | None = None
+    todo: TodoConfig | None = None
 
 def load_config(path: str) -> Config:
     with open(path, encoding="utf-8") as f:

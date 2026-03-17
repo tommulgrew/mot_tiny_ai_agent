@@ -23,6 +23,12 @@
         "enabled": true,
         "trigger_key": "alt_gr"
     },
+    "todo": {
+        "storage_path": "tasks.json",
+        "completed_log_path": "tasks_completed.jsonl",
+        "agent_list_limit": 20,
+        "user_list_limit": 50
+    },
     "email": {
         "user_inbox": {
             "imap_host": "imap.slingshot.co.nz",
