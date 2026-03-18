@@ -44,8 +44,7 @@ class AppConfig(BaseModel):
 class TodoConfig(BaseModel):
     storage_path: str = "tasks.json"
     completed_log_path: str = "tasks_completed.jsonl"
-    agent_list_limit: int = 20
-    user_list_limit: int = 50
+    list_limit: int = 50
 
 # Email tools config
 class ImapConfig(BaseModel):
