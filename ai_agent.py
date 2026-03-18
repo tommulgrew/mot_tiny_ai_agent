@@ -161,5 +161,11 @@ Output - respond in one of three ways:
 - This event is for you, as the agent.
 - Do not notify the user of this event.
 
+"todo" tools:
+- Use to manage the user's to-do list.
+- Only use "complete_todo_item" after the user has confirmed they are complete.
+- Likewise only use "delete_todo_item" when the user agrees the item is incorrect.
+- If the to-do list fills up and no more items can be added, consult with the user about whether existing items can be deleted to make room.
+
 {extra_info_text if extra_info_text else ""}\
 """)
