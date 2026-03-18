@@ -4,9 +4,9 @@
     [X] - Remove historical messages and try again
     [X] - Avoid overflows (somewhat) by removing messages when context usage approaches the limit
 
-[ ] - Email support
-    [ ] - Tool calls
-    [ ] - Email received notification
+[X] - Email support
+    [X] - Tool calls
+    [X] - Email received notification
 
 [ ] - Rules
     [ ] - Extract rules from user speech.
@@ -15,11 +15,9 @@
         Include rules in memory housekeeping, so that user can correct them.
     [ ] - Fetch rules and insert as a floating message.
 
-[ ] - Task lists
+[X] - Task lists
     Allow agent to define task lists, that persist as a floating message.
-    Could combine with a timer event to break down larger tasks into steps.
-    [ ] - Agent task list.
-    [ ] - User task list. Less autonomous. Allows the AI to maintain a todo list for the user.
+    [X] - User task list. Less autonomous. Allows the AI to maintain a todo list for the user.
 
 [X] - Memory system
     [X] - Rework prompt to help memory service understand user input is not directed to them.
@@ -46,3 +44,4 @@
 [ ] - Formalise system event.
     Accept event "type" parameter.
     Wrap in "system_event" structure with "type" and "message"
+
