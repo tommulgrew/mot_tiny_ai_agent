@@ -32,7 +32,7 @@ class AppTools:
     async def _open_app(self, name: str) -> str:
         app = next((app for app in self.apps if app.name.lower() == name.lower()), None)
         if not app: 
-            return f"App '{name}' not found. Use 'list_apps' to list available apps."
+            raise AIToolError(f"App '{name}' not found. Use 'list_apps' to list available apps.")
 
         try:
             subprocess.Popen([app.path])
