@@ -29,11 +29,20 @@
         "list_limit": 50
     },
     "email": {
-        "user_inbox": {
-            "imap_host": "imap.slingshot.co.nz",
-            "imap_port": 993,
-            "username": "tmulgrew"
-        },
+        "user_inboxes": [
+            {
+                "name": "slingshot",
+                "imap_host": "imap.slingshot.co.nz",
+                "imap_port": 993,
+                "username": "tmulgrew"
+            },
+            {
+                "name": "gmail",
+                "imap_host": "imap.gmail.com",
+                "imap_port": 993,
+                "username": "tmulgrew188@gmail.com"
+            }
+        ],
         "storage_path": "email_state.json",
         "max_body_chars": 4000,
         "poll_interval_seconds": 300

@@ -158,16 +158,20 @@
             "additionalProperties": false,
             "description": "Email tool configuration. Supports a read-only user inbox and a read/write agent inbox.",
             "properties": {
-                "user_inbox": {
-                    "type": "object",
-                    "additionalProperties": false,
-                    "description": "Read-only IMAP inbox for the user's personal email.",
-                    "required": ["imap_host", "username"],
-                    "properties": {
-                        "imap_host": { "type": "string", "description": "IMAP server hostname" },
-                        "imap_port": { "type": "number", "default": 993, "description": "IMAP port (SSL)" },
-                        "username":  { "type": "string", "description": "IMAP login username (usually the email address)" },
-                        "password":  { "type": "string", "description": "IMAP password or app-specific password. If omitted, the password is looked up from the OS keyring (Windows Credential Manager on Windows), and the user is prompted to enter it on first run." }
+                "user_inboxes": {
+                    "type": "array",
+                    "description": "One or more read-only IMAP inboxes for the user's personal email. All inboxes are merged into a single consolidated view.",
+                    "items": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": ["name", "imap_host", "username"],
+                        "properties": {
+                            "name":      { "type": "string", "description": "Short account alias used in email IDs (e.g. \"slingshot\"). Must be unique. No colons." },
+                            "imap_host": { "type": "string", "description": "IMAP server hostname" },
+                            "imap_port": { "type": "number", "default": 993, "description": "IMAP port (SSL)" },
+                            "username":  { "type": "string", "description": "IMAP login username (usually the email address)" },
+                            "password":  { "type": "string", "description": "IMAP password or app-specific password. If omitted, looked up from the OS keyring and the user is prompted on first run." }
+                        }
                     }
                 },
                 "agent_inbox": {

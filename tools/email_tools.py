@@ -6,7 +6,9 @@ import json
 import logging
 import smtplib
 from contextlib import contextmanager
+from datetime import datetime, timezone
 from email.header import decode_header as _decode_header
+from email.message import Message as EmailMessage
 from email.mime.text import MIMEText
 from email.utils import parsedate_to_datetime
 from html.parser import HTMLParser
@@ -16,7 +18,7 @@ from typing import Callable, Generator
 import keyring
 
 from ai_tools import AITool, AIToolError, AIToolParam
-from config import AgentInboxConfig, EmailConfig, ImapConfig
+from config import AgentInboxConfig, EmailConfig, ImapConfig, NamedImapConfig
 
 
 # ---------------------------------------------------------------------------
@@ -80,7 +82,16 @@ def _format_date(date_str: str) -> str:
         return (date_str or "")[:16]
 
 
-def _extract_body(msg: email_lib.message.Message) -> str:
+def _parse_sort_datetime(date_str: str) -> datetime:
+    """Parse an email date string into a UTC-normalised naive datetime for sorting."""
+    try:
+        dt = parsedate_to_datetime(date_str)
+        return dt.astimezone(timezone.utc).replace(tzinfo=None)
+    except Exception:
+        return datetime.min
+
+
+def _extract_body(msg: EmailMessage) -> str:
     plain: str | None = None
     html: str | None = None
     attachments: list[str] = []
@@ -117,6 +128,18 @@ def _extract_body(msg: email_lib.message.Message) -> str:
         body += f"\n\n[Attachments: {', '.join(attachments)}]"
 
     return body
+
+
+def _parse_id(id: str) -> tuple[str, int]:
+    """Parse a composite email ID (e.g. 'slingshot:1042') into (account_name, uid)."""
+    parts = id.split(":", 1)
+    if len(parts) != 2:
+        raise AIToolError(f"Invalid email ID '{id}'. Expected format: 'account:uid'.")
+    account_name, uid_str = parts
+    try:
+        return account_name, int(uid_str)
+    except ValueError:
+        raise AIToolError(f"Invalid email ID '{id}'.")
 
 
 # ---------------------------------------------------------------------------
@@ -170,7 +193,7 @@ def _search_uids(imap: imaplib.IMAP4_SSL) -> list[int]:
 # ---------------------------------------------------------------------------
 
 class _EmailState:
-    """Tracks read UIDs and highest-seen UIDs per inbox, persisted to JSON."""
+    """Tracks read UIDs and highest-seen UIDs per account, persisted to JSON."""
 
     def __init__(self, path: Path):
         self._path = path
@@ -178,18 +201,18 @@ class _EmailState:
         self._max_uids: dict[str, int] = {}
         self._load()
 
-    def is_read(self, inbox: str, uid: int) -> bool:
-        return uid in self._read_uids.get(inbox, set())
+    def is_read(self, account: str, uid: int) -> bool:
+        return uid in self._read_uids.get(account, set())
 
-    def mark_read(self, inbox: str, uid: int) -> None:
-        self._read_uids.setdefault(inbox, set()).add(uid)
+    def mark_read(self, account: str, uid: int) -> None:
+        self._read_uids.setdefault(account, set()).add(uid)
         self._save()
 
-    def get_max_uid(self, inbox: str) -> int:
-        return self._max_uids.get(inbox, 0)
+    def get_max_uid(self, account: str) -> int:
+        return self._max_uids.get(account, 0)
 
-    def set_max_uid(self, inbox: str, uid: int) -> None:
-        self._max_uids[inbox] = uid
+    def set_max_uid(self, account: str, uid: int) -> None:
+        self._max_uids[account] = uid
         self._save()
 
     def _load(self) -> None:
@@ -217,6 +240,10 @@ class _EmailState:
 # EmailTools
 # ---------------------------------------------------------------------------
 
+# Row type: (sort datetime, formatted display line)
+_HeaderRow = tuple[datetime, str]
+
+
 class EmailTools:
     def __init__(self, config: EmailConfig, event_callback: Callable[[dict], None] | None = None):
         self.config = config
@@ -224,67 +251,71 @@ class EmailTools:
         self.logger = logging.getLogger("tinyagent.email")
         self._state = _EmailState(Path(config.storage_path))
 
-        # Resolve passwords at startup (prompts if not in keyring)
+        # Resolve passwords at startup (prompts if not in keyring), keyed by account name
         self._passwords: dict[str, str] = {}
-        if config.user_inbox:
-            self._passwords["user"] = _resolve_password(config.user_inbox, "user inbox")
+        for inbox in config.user_inboxes:
+            self._passwords[inbox.name] = _resolve_password(inbox, f'"{inbox.name}" inbox')
         if config.agent_inbox:
             self._passwords["agent"] = _resolve_password(config.agent_inbox, "agent inbox")
 
     def make_tools(self) -> list[AITool]:
         tools: list[AITool] = []
 
-        inboxes: list[str] = []
-        if self.config.user_inbox:
-            inboxes.append('"user"')
-        if self.config.agent_inbox:
-            inboxes.append('"agent"')
+        has_user  = bool(self.config.user_inboxes)
+        has_agent = bool(self.config.agent_inbox)
 
-        if not inboxes:
-            return tools
+        if has_user:
+            tools.append(AITool(
+                name="list_user_emails",
+                description=(
+                    "List the 20 most recent emails across all of the user's email accounts, "
+                    "merged and sorted by date. "
+                    "Returns an ID, date, sender, subject, and read status for each email. "
+                    "Use the ID with read_email to fetch the full message."
+                ),
+                params=[],
+                async_callback=self._list_user_emails,
+            ))
 
-        inbox_desc = f"Inbox to access: {' or '.join(inboxes)}"
+        if has_agent:
+            tools.append(AITool(
+                name="list_agent_emails",
+                description=(
+                    "List the 20 most recent emails in the agent's own inbox. "
+                    "Returns an ID, date, sender, subject, and read status for each email. "
+                    "Use the ID with read_email to fetch the full message."
+                ),
+                params=[],
+                async_callback=self._list_agent_emails,
+            ))
 
-        tools.append(AITool(
-            name="list_emails",
-            description=(
-                "List the 20 most recent emails in an inbox. "
-                "Returns UID, date, sender, subject, and read status for each email. "
-                "Use the UID with read_email to fetch the full message."
-            ),
-            params=[
-                AIToolParam(name="inbox", type="string", description=inbox_desc),
-            ],
-            async_callback=self._list_emails,
-        ))
+        if has_user or has_agent:
+            tools.append(AITool(
+                name="read_email",
+                description=(
+                    f"Read the full content of an email by ID (from list_user_emails or list_agent_emails). "
+                    f"Body is limited to {self.config.max_body_chars} characters per call. "
+                    f"If the email is larger, a continuation hint is appended — use the offset parameter to read subsequent chunks. "
+                    f"HTML emails are converted to plain text. Attachments are listed by name only."
+                ),
+                params=[
+                    AIToolParam(name="id",     type="string",  description="Email ID from list_user_emails or list_agent_emails"),
+                    AIToolParam(name="offset", type="integer", description="Character offset to start reading from", optional=True),
+                ],
+                async_callback=self._read_email,
+            ))
 
-        tools.append(AITool(
-            name="read_email",
-            description=(
-                f"Read the full content of an email by UID. "
-                f"Body is limited to {self.config.max_body_chars} characters per call. "
-                f"If the email is larger, a continuation hint is appended — use the offset parameter to read subsequent chunks. "
-                f"HTML emails are converted to plain text. Attachments are listed by name only."
-            ),
-            params=[
-                AIToolParam(name="inbox", type="string", description=inbox_desc),
-                AIToolParam(name="id", type="string", description="Email UID from list_emails"),
-                AIToolParam(name="offset", type="integer", description="Character offset to start reading from", optional=True),
-            ],
-            async_callback=self._read_email,
-        ))
-
-        if self.config.agent_inbox:
+        if has_agent:
             tools.append(AITool(
                 name="send_email",
                 description=(
-                    "Send an email from the agent inbox. "
+                    "Send an email from the agent's inbox. "
                     "The recipient address must be in the configured send whitelist."
                 ),
                 params=[
-                    AIToolParam(name="to", type="string", description="Recipient email address"),
+                    AIToolParam(name="to",      type="string", description="Recipient email address"),
                     AIToolParam(name="subject", type="string", description="Email subject line"),
-                    AIToolParam(name="body", type="string", description="Plain text email body"),
+                    AIToolParam(name="body",    type="string", description="Plain text email body"),
                 ],
                 async_callback=self._send_email,
             ))
@@ -292,71 +323,73 @@ class EmailTools:
         return tools
 
     async def check_task(self) -> None:
-        """Background task: polls inboxes periodically for new emails."""
+        """Background task: polls all inboxes periodically for new emails."""
         while True:
             await asyncio.sleep(self.config.poll_interval_seconds)
-            for inbox_name, inbox_config in self._inbox_items():
+            for account_name, inbox_config in self._all_inbox_items():
                 try:
-                    await self._poll_inbox(inbox_name, inbox_config)
+                    await self._poll_inbox(account_name, inbox_config)
                 except Exception as e:
-                    self.logger.warning(f"Email poll error ({inbox_name}): {e}")
+                    self.logger.warning(f"Email poll error ({account_name}): {e}")
 
     # ------------------------------------------------------------------
     # Tool callbacks
     # ------------------------------------------------------------------
 
-    async def _list_emails(self, inbox: str) -> str:
-        config = self._get_inbox_config(inbox)
+    async def _list_user_emails(self) -> str:
+        if not self.config.user_inboxes:
+            raise AIToolError("No user inboxes are configured.")
 
-        password = self._passwords[inbox]
+        # Fetch headers from all user inboxes concurrently
+        loop = asyncio.get_running_loop()
+        fetch_tasks = [
+            loop.run_in_executor(
+                None, self._fetch_account_headers, inbox.name, inbox, self._passwords[inbox.name]
+            )
+            for inbox in self.config.user_inboxes
+        ]
+        results = await asyncio.gather(*fetch_tasks, return_exceptions=True)
 
-        def _run() -> str:
-            with _imap_connect(config, password) as imap:
-                all_uids = _search_uids(imap)
-                if not all_uids:
-                    return "No emails found."
+        all_rows: list[_HeaderRow] = []
+        for inbox, result in zip(self.config.user_inboxes, results):
+            if isinstance(result, Exception):
+                self.logger.warning(f"Error fetching headers for '{inbox.name}': {result}")
+            else:
+                all_rows.extend(result)
 
-                # Most recent 20
-                uids = sorted(all_uids, reverse=True)[:20]
+        if not all_rows:
+            return "No emails found."
 
-                lines: list[str] = []
-                for uid in uids:
-                    uid_bytes = str(uid).encode()
-                    typ, data = imap.uid(  # type: ignore[arg-type]
-                        "fetch", uid_bytes,
-                        "(BODY.PEEK[HEADER.FIELDS (FROM SUBJECT DATE)])"
-                    )
-                    if typ != "OK" or not data or not isinstance(data[0], tuple):
-                        continue
-                    msg = email_lib.message_from_bytes(data[0][1])
-                    from_addr = _decode_header_str(msg.get("From", ""))[:35]
-                    subject   = _decode_header_str(msg.get("Subject", "(no subject)"))[:45]
-                    date      = _format_date(_decode_header_str(msg.get("Date", "")))
-                    read_flag = " [read]" if self._state.is_read(inbox, uid) else ""
-                    lines.append(f"{uid:<6}  {date}  {from_addr:<35}  {subject}{read_flag}")
+        all_rows.sort(key=lambda r: r[0], reverse=True)
+        return "\n".join(r[1] for r in all_rows[:20])
 
-                return "\n".join(lines)
+    async def _list_agent_emails(self) -> str:
+        cfg = self.config.agent_inbox
+        if not cfg:
+            raise AIToolError("Agent inbox is not configured.")
 
-        try:
-            return await asyncio.get_running_loop().run_in_executor(None, _run)
-        except imaplib.IMAP4.error as e:
-            raise AIToolError(f"IMAP error: {e}")
+        loop = asyncio.get_running_loop()
+        rows = await loop.run_in_executor(
+            None, self._fetch_account_headers, "agent", cfg, self._passwords["agent"]
+        )
 
-    async def _read_email(self, inbox: str, id: str, offset: int | None = None) -> str:
-        config = self._get_inbox_config(inbox)
+        if not rows:
+            return "No emails found."
+
+        rows.sort(key=lambda r: r[0], reverse=True)
+        return "\n".join(r[1] for r in rows[:20])
+
+    async def _read_email(self, id: str, offset: int | None = None) -> str:
+        account_name, uid = _parse_id(id)
+        config   = self._get_account_config(account_name)
+        password = self._passwords.get(account_name)
+        if password is None:
+            raise AIToolError(f"No password available for account '{account_name}'.")
         offset = offset or 0
 
-        try:
-            uid = int(id)
-        except ValueError:
-            raise AIToolError(f"Invalid email ID '{id}'.")
-
-        password = self._passwords[inbox]
-
         def _run() -> str:
-            uid_bytes = str(uid).encode()
             with _imap_connect(config, password) as imap:
-                typ, data = imap.uid("fetch", uid_bytes, "(BODY.PEEK[])")  # type: ignore[arg-type]
+                typ, data = imap.uid("fetch", str(uid), "(BODY.PEEK[])")  # type: ignore[arg-type]
                 if typ != "OK" or not data or not isinstance(data[0], tuple):
                     raise AIToolError(f"Email {id} not found.")
                 msg = email_lib.message_from_bytes(data[0][1])
@@ -374,7 +407,7 @@ class EmailTools:
         except imaplib.IMAP4.error as e:
             raise AIToolError(f"IMAP error: {e}")
 
-        self._state.mark_read(inbox, uid)
+        self._state.mark_read(account_name, uid)
 
         total = len(full_text)
         chunk = full_text[offset : offset + self.config.max_body_chars]
@@ -423,8 +456,8 @@ class EmailTools:
     # Polling
     # ------------------------------------------------------------------
 
-    async def _poll_inbox(self, inbox_name: str, inbox_config: ImapConfig) -> None:
-        password = self._passwords[inbox_name]
+    async def _poll_inbox(self, account_name: str, inbox_config: ImapConfig) -> None:
+        password = self._passwords[account_name]
 
         def _get_uids() -> list[int]:
             with _imap_connect(inbox_config, password) as imap:
@@ -435,22 +468,21 @@ class EmailTools:
             return
 
         current_max = max(all_uids)
-        known_max = self._state.get_max_uid(inbox_name)
+        known_max   = self._state.get_max_uid(account_name)
 
         if known_max == 0:
-            # First poll — record baseline without firing an event
-            self._state.set_max_uid(inbox_name, current_max)
+            self._state.set_max_uid(account_name, current_max)
             return
 
         if current_max > known_max:
             new_uids = [u for u in all_uids if u > known_max]
-            self._state.set_max_uid(inbox_name, current_max)
+            self._state.set_max_uid(account_name, current_max)
             if self.event_callback:
                 self.event_callback({
                     "system_event": {
                         "type": "new_email",
-                        "inbox": inbox_name,
-                        "message": f"{len(new_uids)} new email(s) received in the {inbox_name} inbox.",
+                        "account": account_name,
+                        "message": f"{len(new_uids)} new email(s) received in the '{account_name}' inbox.",
                     }
                 })
 
@@ -458,19 +490,49 @@ class EmailTools:
     # Helpers
     # ------------------------------------------------------------------
 
-    def _get_inbox_config(self, inbox: str) -> ImapConfig:
-        if inbox == "user":
-            if self.config.user_inbox:
-                return self.config.user_inbox
-            raise AIToolError("User inbox is not configured.")
-        if inbox == "agent":
+    def _fetch_account_headers(
+        self, account_name: str, config: ImapConfig, password: str
+    ) -> list[_HeaderRow]:
+        """Synchronous — intended to be called via run_in_executor."""
+        with _imap_connect(config, password) as imap:
+            all_uids = _search_uids(imap)
+            if not all_uids:
+                return []
+
+            uids = sorted(all_uids, reverse=True)[:20]
+            rows: list[_HeaderRow] = []
+
+            for uid in uids:
+                typ, data = imap.uid(  # type: ignore[arg-type]
+                    "fetch", str(uid),
+                    "(BODY.PEEK[HEADER.FIELDS (FROM SUBJECT DATE)])"
+                )
+                if typ != "OK" or not data or not isinstance(data[0], tuple):
+                    continue
+                msg       = email_lib.message_from_bytes(data[0][1])
+                from_addr = _decode_header_str(msg.get("From", ""))[:35]
+                subject   = _decode_header_str(msg.get("Subject", "(no subject)"))[:45]
+                date_str  = _decode_header_str(msg.get("Date", ""))
+                sort_dt   = _parse_sort_datetime(date_str)
+                date_fmt  = _format_date(date_str)
+                id_str    = f"{account_name}:{uid}"
+                read_flag = " [read]" if self._state.is_read(account_name, uid) else ""
+                rows.append((sort_dt, f"{id_str:<20}  {date_fmt}  {from_addr:<35}  {subject}{read_flag}"))
+
+            return rows
+
+    def _get_account_config(self, account_name: str) -> ImapConfig:
+        if account_name == "agent":
             if self.config.agent_inbox:
                 return self.config.agent_inbox
             raise AIToolError("Agent inbox is not configured.")
-        raise AIToolError(f"Unknown inbox '{inbox}'. Use 'user' or 'agent'.")
+        inbox = next((i for i in self.config.user_inboxes if i.name == account_name), None)
+        if inbox is None:
+            raise AIToolError(f"Unknown account '{account_name}'.")
+        return inbox
 
-    def _inbox_items(self) -> Generator[tuple[str, ImapConfig], None, None]:
-        if self.config.user_inbox:
-            yield "user", self.config.user_inbox
+    def _all_inbox_items(self) -> Generator[tuple[str, ImapConfig], None, None]:
+        for inbox in self.config.user_inboxes:
+            yield inbox.name, inbox
         if self.config.agent_inbox:
             yield "agent", self.config.agent_inbox

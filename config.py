@@ -53,13 +53,16 @@ class ImapConfig(BaseModel):
     username: str
     password: str | None = None     # If omitted, resolved from OS keyring at startup
 
+class NamedImapConfig(ImapConfig):
+    name: str                       # Short account alias used in email IDs (e.g. "slingshot")
+
 class AgentInboxConfig(ImapConfig):
     smtp_host: str
     smtp_port: int = 587
     send_whitelist: list[str] = []
 
 class EmailConfig(BaseModel):
-    user_inbox: ImapConfig | None = None
+    user_inboxes: list[NamedImapConfig] = []
     agent_inbox: AgentInboxConfig | None = None
     storage_path: str = "email_state.json"
     max_body_chars: int = 4000
