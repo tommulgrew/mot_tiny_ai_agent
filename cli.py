@@ -30,7 +30,7 @@ async def main():
             user_input = user_input.strip()
             if user_input.lower() in ("exit", "quit"):
                 break
-            app.user_input(user_input)
+            app.agent.user_input(user_input)
 
 if __name__ == "__main__":
     asyncio.run(main())

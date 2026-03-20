@@ -1,13 +1,22 @@
+import asyncio
 import logging
 import json
 from datetime import datetime
-from typing import Callable
+from typing import Any, Callable, Literal
 import humanize
 from pydantic import BaseModel
 from ai_client import AIChatMessageHistory, AIClient, AIClientError
 from ai_tools import AITool, AITools, AIToolParam
 from ai_memory import AIMemory
 from config import AgentConfig
+
+class UserInputEvent(BaseModel):
+    type: Literal["user"]
+    input: str
+
+class SystemEvent(BaseModel):
+    type: Literal["system"]
+    data: Any       # Must be serializable to JSON
 
 class AIAgentPrompts(BaseModel):
     main: str           # Main agent system prompt
@@ -35,11 +44,49 @@ class AIAgent:
         self.message_history = AIChatMessageHistory()
         self.user_last_active = datetime.now()
 
-    async def process_user_message(self, message: str):
+        # Event queue
+        self.event_queue = asyncio.Queue()
+        asyncio.create_task(self._queue_worker())
+
+    def user_input(self, input: str):        
+        self._queue_event(UserInputEvent(type="user", input=input))
+
+    def system_event(self, data):
+        self._queue_event(SystemEvent(type="system", data=data))
+
+    def voice_event(self, text: str):
+        if self.output_callback:
+            self.output_callback(f"VOICE INPUT: {text}")
+        self._queue_event(UserInputEvent(type="user", input=f"[Voice input]: {text}"))
+
+    def _queue_event(self, event: UserInputEvent | SystemEvent):
+        self.event_queue.put_nowait(event)
+
+    async def _queue_worker(self):
+        """Main queue worker loop"""
+        while True:
+            event: UserInputEvent | SystemEvent = await self.event_queue.get()
+            
+            try:
+                # Process event
+                if event.type == "user":
+                    await self._process_user_message(event.input)
+
+                elif event.type == "system":
+                    await self._process_system_event(event.data)
+            
+            except AIClientError as e:
+                self.logger.error(f"AI client error: {str(e)}")
+
+            finally:
+                # Event done
+                self.event_queue.task_done()            
+
+    async def _process_user_message(self, message: str):
         self.user_last_active = datetime.now()
         await self._process_event(message)
 
-    async def process_system_event(self, data):
+    async def _process_system_event(self, data):
         await self._process_event(json.dumps(data))
 
     async def _process_event(self, content: str):
