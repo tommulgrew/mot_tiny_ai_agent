@@ -130,16 +130,23 @@ def _extract_body(msg: EmailMessage) -> str:
     return body
 
 
-def _parse_id(id: str) -> tuple[str, int]:
+def _parse_id(id) -> tuple[str, int]:
     """Parse a composite email ID (e.g. 'slingshot:1042') into (account_name, uid)."""
-    parts = id.split(":", 1)
+    id_str = str(id)
+    parts = id_str.split(":", 1)
     if len(parts) != 2:
-        raise AIToolError(f"Invalid email ID '{id}'. Expected format: 'account:uid'.")
+        raise AIToolError(
+            f"Invalid email ID '{id_str}'. Expected format 'account:uid' (e.g. 'slingshot:1042'). "
+            "Use list_user_emails or list_agent_emails to get valid IDs."
+        )
     account_name, uid_str = parts
     try:
         return account_name, int(uid_str)
     except ValueError:
-        raise AIToolError(f"Invalid email ID '{id}'.")
+        raise AIToolError(
+            f"Invalid email ID '{id_str}'. The UID part must be an integer. "
+            "Use list_user_emails or list_agent_emails to get valid IDs."
+        )
 
 
 # ---------------------------------------------------------------------------
