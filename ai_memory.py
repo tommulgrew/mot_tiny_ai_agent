@@ -1,4 +1,3 @@
-import logging
 import asyncio
 from dataclasses import field
 import re
@@ -6,11 +5,10 @@ import random
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Callable, Literal
-from openai import BadRequestError
 from pydantic import BaseModel
 import Stemmer
 import humanize
-from ai_client import AIClient
+from ai_client import AIClient, AIClientTokenOverflowError
 from ai_tools import AITools, AITool, AIToolParam
 from config import AgentConfig, MemoryConfig
 from util import create_logger
@@ -168,12 +166,11 @@ class AIMemory:
                     user_prompt=user_prompt,
                     tools=tools
                 )
-        except BadRequestError as e:
-            if "Context size has been exceeded" not in str(e):
-                raise
-            # Otherwise ignore context size exceeded. This is non-critical 
+        except AIClientTokenOverflowError:
+            # Ignore context size exceeded. This is non-critical 
             # background process. Often a few memories will have been written
             # anyway, so just carry on and save them.
+            pass
         if self.dirty:
             self._save()
 

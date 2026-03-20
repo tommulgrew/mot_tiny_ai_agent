@@ -1,15 +1,13 @@
 import logging
 import json
 from datetime import datetime
-from collections import deque
 from typing import Callable
 import humanize
-from openai import BadRequestError
 from pydantic import BaseModel
 from ai_client import AIChatMessageHistory, AIClient, AIClientError
 from ai_tools import AITool, AITools, AIToolParam
 from ai_memory import AIMemory
-from config import AgentConfig, MemoryConfig
+from config import AgentConfig
 
 class AIAgentPrompts(BaseModel):
     main: str           # Main agent system prompt
