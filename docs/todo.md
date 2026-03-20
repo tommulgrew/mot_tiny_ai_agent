@@ -45,3 +45,4 @@
     Accept event "type" parameter.
     Wrap in "system_event" structure with "type" and "message"
 
+[X] - Catch AIClientTokenOverflowError in memory service event loops
