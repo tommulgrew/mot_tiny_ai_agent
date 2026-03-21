@@ -15,7 +15,7 @@ from openai import AsyncClient, BadRequestError
 from openai.types.chat import ChatCompletionMessageParam, ChatCompletionAssistantMessageParam, ChatCompletionSystemMessageParam, ChatCompletionMessageToolCallParam, ChatCompletionFunctionToolParam, ChatCompletionToolMessageParam, ChatCompletionUserMessageParam
 from openai.types.chat.chat_completion_tool_param import FunctionDefinition
 
-class OpenAIClient(AIChatClient):
+class OpenAIChatClient(AIChatClient):
     """Basic client for OpenAI chat completions API, with tool callbacks"""
     
     def __init__(self, config: ModelConfig):

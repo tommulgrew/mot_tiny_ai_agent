@@ -2,7 +2,6 @@
 from abc import ABC, abstractmethod
 from asyncio import Event
 from typing import Callable
-from pydantic import BaseModel
 from ai.message_accessor import AIMessageAccessor
 from ai.tools import AITools
 from ai.message_history import AIChatMessageHistory
