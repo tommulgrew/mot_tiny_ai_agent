@@ -127,11 +127,11 @@ class AIContextManager:
         if not is_system_info_callback:
             return
         group_messages = history.group_messages(group)
-        history.remove(
+        history.remove([
             msg
-            for msg in group_messages 
+            for msg in group_messages
             if self.message_accessor.is_user_message(msg) and is_system_info_callback(self.message_accessor.get_content(msg))
-        )
+        ])
 
     def _truncate_tool_results(self, history: AIChatMessageHistory, group: AIChatMessageGroup):
         group_messages = history.group_messages(group)
@@ -139,7 +139,7 @@ class AIContextManager:
             if self.message_accessor.is_tool_message(msg):
                 content = self.message_accessor.get_content(msg)
                 if len(content) > TOOL_CONTENT_TRUNCATE_LENGTH:
-                    new_content = content[:97] + "..."
+                    new_content = content[:TOOL_CONTENT_TRUNCATE_LENGTH - 3] + "..."
                     history.set_content(group.start_index + i, new_content)
 
     def _remove_group(self, history: AIChatMessageHistory, group: AIChatMessageGroup):

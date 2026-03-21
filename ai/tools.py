@@ -2,8 +2,8 @@ from pydantic import BaseModel
 from typing import Awaitable, Callable, Iterable
 
 class AIToolError(Exception):
-    """Raised when an error occurs calling a tool. Message will be passed back to the LLM as the tool response."""
-    """Single-use tools are not treated as "used" when an AIToolError is thrown, allowing the LLM to try to call the tool again."""
+    """Raised when an error occurs calling a tool. Message will be passed back to the LLM as the tool response.
+    Single-use tools are not treated as "used" when an AIToolError is thrown, allowing the LLM to try to call the tool again."""
 
 class AIToolParam(BaseModel):
     """Parameter definition for an AI tool"""

@@ -1,6 +1,6 @@
 from asyncio import Event
 import json
-from typing import Callable, Iterable, cast
+from typing import Callable, cast
 from ai.client import AIChatClient, AIChatResponse
 from ai.context_manager import AIContextManager
 from ai.tools import AIToolError, AITools, AITool
@@ -203,8 +203,6 @@ class OpenAIChatClient(AIChatClient):
     def get_message_accessor(self) -> AIMessageAccessor:
         return OpenAIMessageAccessor()
 
-    def flatten_messages(self, messages: Iterable[ChatCompletionMessageParam]) -> str:
-        return "\n\n".join(f"[{m['role'].upper()}]:\n{m.get('content') or ''}" for m in messages)
 
 def make_chat_completion_tool(tool: AITool) -> ChatCompletionFunctionToolParam:
     

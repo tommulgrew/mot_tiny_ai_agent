@@ -1,5 +1,3 @@
-from dataclasses import field
-from typing import Callable, Iterable
 from pydantic import BaseModel
 from ai.message_accessor import AIMessageAccessor
 
@@ -19,13 +17,13 @@ class AIChatMessageHistory:
     def set_token_count(self, token_count: int):
         self.token_count = token_count
 
-    def add(self, messages: Iterable):
+    def add(self, messages: list):
         self.messages.extend(messages)
 
         # Adjust estimated token count
         self.token_count += estimate_tokens_list(messages, self.message_accessor)
 
-    def remove(self, messages: Iterable):
+    def remove(self, messages: list):
         for msg in messages:
             self.messages.remove(msg)
 
@@ -66,5 +64,5 @@ def estimate_tokens(message, accessor: AIMessageAccessor) -> int:
     content = accessor.get_content(message)
     return len(content) // 4
 
-def estimate_tokens_list(messages: Iterable, accessor: AIMessageAccessor) -> int:
+def estimate_tokens_list(messages: list, accessor: AIMessageAccessor) -> int:
     return sum(estimate_tokens(m, accessor) for m in messages)

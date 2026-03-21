@@ -49,14 +49,14 @@ class AIAgent:
         self.logger = logging.getLogger("tinyagent.agent")
         self.config = config
         self.client = client
-        self.message_accesor = client.get_message_accessor()
+        self.message_accessor = client.get_message_accessor()
         self.memory = memory
         self.tools = tools
         if self.tools:
             self.tools.add([self._make_recall_memories_tool()])
         self.output_callback = output_callback
         self.prompts = create_ai_prompts(users_name=config.users_name, agents_name=config.agents_name, extra_info=config.extra_info)
-        self.message_history = AIChatMessageHistory(message_accessor=self.message_accesor)
+        self.message_history = AIChatMessageHistory(message_accessor=self.message_accessor)
         self.user_last_active = datetime.now()
 
         # Event queue
@@ -161,8 +161,8 @@ class AIAgent:
 
     def _is_system_info_msg(self, msg) -> bool:
         return(
-            self.message_accesor.is_user_message(msg) and
-            self._is_system_info_content(self.message_accesor.get_content(msg))
+            self.message_accessor.is_user_message(msg) and
+            self._is_system_info_content(self.message_accessor.get_content(msg))
         )
 
     def _is_system_info_content(self, content: str) -> bool:
