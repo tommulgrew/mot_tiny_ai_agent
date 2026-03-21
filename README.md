@@ -200,6 +200,22 @@ Set `prompt_token_limit` a little below your model's actual context size — thi
 ```
 Give each folder a short alias — the agent uses these names rather than full paths. Access is `"rw"` (read/write) or `"ro"` (read-only). Deleted files go to `trash_path` rather than being permanently deleted.
 
+### `reminders` *(optional)*
+```json
+"reminders": {
+    "storage_path": "reminders.json"
+}
+```
+Enables the reminder tools (`create_reminder`, `list_reminders`, `delete_reminder`). Omit the section to disable them.
+
+### `speak` *(optional)*
+```json
+"speak": {
+    "enabled": true
+}
+```
+Enables the `speak` tool, which reads text aloud via text-to-speech. Omit the section (or set `"enabled": false`) to disable it.
+
 ### `todo` *(optional)*
 ```json
 "todo": {
