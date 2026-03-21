@@ -44,8 +44,6 @@ class TrimTokensOp(BaseModel):
         )
         return op_weight * age_weight
 
-TOOL_CONTENT_TRUNCATE_LENGTH = 100
-
 class AIChatMessageHistory(BaseModel):
     """Stores chat message history, and manages trimming to recover tokens"""
     messages: list[ChatCompletionMessageParam] = field(default_factory=list)
@@ -71,38 +69,7 @@ class AIChatMessageHistory(BaseModel):
         new_message_tokens = estimate_tokens(message)
         self.token_count = self.token_count - prev_message_tokens + new_message_tokens
 
-    def trim_to_limit(self, token_limit: int, is_system_info_callback: Callable[[str], bool] | None) -> bool:
-        while self.token_count > token_limit:
-            if not self.trim(is_system_info_callback):
-                return False
-        return True
-
-    def trim(self, is_system_info_callback: Callable[[str], bool] | None) -> bool:
-
-        # Split messages into groups. Exclude last group, as we cannot trim tokens
-        # from the current active group.
-        groups = self._get_groups()[:-1]
-        if not groups:
-            return False
-
-        # Create token trim operations for each group
-        ops = [ 
-            TrimTokensOp(
-                group=g, 
-                age=len(groups) - idx - 1, 
-                op_type=self._get_trim_tokens_op_type(g, is_system_info_callback)
-            ) 
-            for idx, g in enumerate(groups)
-        ]
-
-        # Sort by weight
-        ops.sort(key=lambda x: x.get_weight())
-
-        # Apply lowest weighted operation
-        self._do_trim_op(ops[0],is_system_info_callback)
-        return True
-
-    def _get_groups(self) -> list[AIChatMessageGroup]:
+    def get_groups(self) -> list[AIChatMessageGroup]:
         groups = []
         i = 0
         user_message_count = 0
@@ -122,9 +89,45 @@ class AIChatMessageHistory(BaseModel):
         
         return groups
 
-    def _get_trim_tokens_op_type(self, group: AIChatMessageGroup, is_system_info_callback: Callable[[str], bool] | None) -> TrimTokensOpType:
-        group_messages = self._group_messages(group)
+    def group_messages(self, group: AIChatMessageGroup) -> list[ChatCompletionMessageParam]:
+        return self.messages[group.start_index:group.start_index + group.message_count]
 
+TOOL_CONTENT_TRUNCATE_LENGTH = 100
+
+class AIContextManager:
+
+    def trim_to_limit(self, history: AIChatMessageHistory, token_limit: int, is_system_info_callback: Callable[[str], bool] | None) -> bool:
+        while history.token_count > token_limit:
+            if not self.trim(history, is_system_info_callback):
+                return False
+        return True
+
+    def trim(self, history: AIChatMessageHistory, is_system_info_callback: Callable[[str], bool] | None) -> bool:
+
+        # Split messages into groups. Exclude last group, as we cannot trim tokens
+        # from the current active group.
+        groups = history.get_groups()[:-1]
+        if not groups:
+            return False
+
+        # Create token trim operations for each group
+        ops = [ 
+            TrimTokensOp(
+                group=g, 
+                age=len(groups) - idx - 1, 
+                op_type=self._get_trim_tokens_op_type(history.group_messages(g), is_system_info_callback)
+            ) 
+            for idx, g in enumerate(groups)
+        ]
+
+        # Sort by weight
+        ops.sort(key=lambda x: x.get_weight())
+
+        # Apply lowest weighted operation
+        self._do_trim_op(ops[0], history, is_system_info_callback)
+        return True
+
+    def _get_trim_tokens_op_type(self, group_messages: list[ChatCompletionMessageParam], is_system_info_callback: Callable[[str], bool] | None) -> TrimTokensOpType:
         if self._group_has_think_block(group_messages):
             return TrimTokensOpType.STRIP_THINK
         
@@ -137,22 +140,19 @@ class AIChatMessageHistory(BaseModel):
         else:
             return TrimTokensOpType.REMOVE_GROUP
 
-    def _group_messages(self, group: AIChatMessageGroup) -> list[ChatCompletionMessageParam]:
-        return self.messages[group.start_index:group.start_index + group.message_count]
-
-    def _do_trim_op(self, op: TrimTokensOp, is_system_info_callback: Callable[[str], bool] | None):
+    def _do_trim_op(self, op: TrimTokensOp, history: AIChatMessageHistory, is_system_info_callback: Callable[[str], bool] | None):
 
         if (op.op_type == TrimTokensOpType.STRIP_THINK):
-            self._strip_think_blocks(op.group)
+            self._strip_think_blocks(history, op.group)
 
         elif (op.op_type == TrimTokensOpType.REMOVE_SYS_INFO):
-            self._remove_sys_info(op.group, is_system_info_callback)
+            self._remove_sys_info(history, op.group, is_system_info_callback)
 
         elif (op.op_type == TrimTokensOpType.TRUNCATE_TOOL_RESULTS):
-            self._truncate_tool_results(op.group)
+            self._truncate_tool_results(history, op.group)
 
         elif (op.op_type == TrimTokensOpType.REMOVE_GROUP):
-            self._remove_group(op.group)
+            self._remove_group(history, op.group)
 
     def _group_has_think_block(self, messages: list[ChatCompletionMessageParam]) -> bool:
         return any(
@@ -174,37 +174,37 @@ class AIChatMessageHistory(BaseModel):
             for m in messages
         )
 
-    def _strip_think_blocks(self, group: AIChatMessageGroup):
-        group_messages = self._group_messages(group)
+    def _strip_think_blocks(self, history: AIChatMessageHistory, group: AIChatMessageGroup):
+        group_messages = history.group_messages(group)
         think_open = False
         for i, msg in enumerate(group_messages):
             if _is_assistant_message(msg):
                 content = _get_message_content(msg)
                 content, think_open = strip_think_block(content, think_open)
-                self.set_content(group.start_index + i, content)
+                history.set_content(group.start_index + i, content)
 
-    def _remove_sys_info(self, group: AIChatMessageGroup, is_system_info_callback: Callable[[str], bool] | None):
+    def _remove_sys_info(self, history: AIChatMessageHistory, group: AIChatMessageGroup, is_system_info_callback: Callable[[str], bool] | None):
         if not is_system_info_callback:
             return
-        group_messages = self._group_messages(group)
-        self.remove(
+        group_messages = history.group_messages(group)
+        history.remove(
             msg
             for msg in group_messages 
             if _is_user_message(msg) and is_system_info_callback(_get_message_content(msg))
         )
 
-    def _truncate_tool_results(self, group: AIChatMessageGroup):
-        group_messages = self._group_messages(group)
+    def _truncate_tool_results(self, history: AIChatMessageHistory, group: AIChatMessageGroup):
+        group_messages = history.group_messages(group)
         for i, msg in enumerate(group_messages):
             if _is_tool_message(msg):
                 content = _get_message_content(msg)
                 if len(content) > TOOL_CONTENT_TRUNCATE_LENGTH:
                     new_content = content[:97] + "..."
-                    self.set_content(group.start_index + i, new_content)
+                    history.set_content(group.start_index + i, new_content)
 
-    def _remove_group(self, group: AIChatMessageGroup):
-        group_messages = self._group_messages(group)
-        self.remove(group_messages)
+    def _remove_group(self, history: AIChatMessageHistory, group: AIChatMessageGroup):
+        group_messages = history.group_messages(group)
+        history.remove(group_messages)
 
 class AIChatResponse(BaseModel):
     new_messages: list[ChatCompletionMessageParam]
@@ -219,6 +219,7 @@ class AIClient:
             api_key=config.api_key,
             base_url=config.url
         )
+        self.context_manager = AIContextManager()
 
         # Create separate logger for chat completions dumps
         self.chat_logger = create_logger("tinyagent.completions", "completions_log.txt", propagate=False)
@@ -286,7 +287,7 @@ class AIClient:
                 return AIChatResponse(history=history, new_messages=new_messages)
 
             # Trim history if estimated token size exceeds threshold
-            history.trim_to_limit(self.config.prompt_token_limit, is_system_info_callback)
+            self.context_manager.trim_to_limit(history, self.config.prompt_token_limit, is_system_info_callback)
 
             self.chat_logger.debug("Chat API request: %s", log_dump([ system_message, *history.messages ]))            
 
@@ -304,7 +305,7 @@ class AIClient:
                         raise
 
                     # Trim history and retry
-                    if not retry_on_context_full or not history.trim(is_system_info_callback):
+                    if not retry_on_context_full or not self.context_manager.trim(history, is_system_info_callback):
                         raise AIClientTokenOverflowError("Token context overflowed.")
 
             self.chat_logger.debug("Chat API response: %s", log_dump(response))            
