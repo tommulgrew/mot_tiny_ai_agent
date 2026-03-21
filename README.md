@@ -147,6 +147,14 @@ eventually runs out of context tokens.
 python cli.py
 ```
 
+Key in a message and press ENTER to interact with the agent.
+
+Remember:
+- tinyagent can sometimes take a while to respond. Be prepared to wait a minute,
+  especially if there are multiple tool calls.
+- If it gets stuck (e.g. calling the same tool repeatedly), you can interrupt it
+  by typing in a new message.
+
 --------------------------------------------------------------------------------
 
 ## Configuration
