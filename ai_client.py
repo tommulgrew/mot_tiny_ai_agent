@@ -1,3 +1,4 @@
+from asyncio import Event
 from enum import Enum
 import json
 from dataclasses import field
@@ -230,7 +231,8 @@ class AIClient:
             strip_think: bool = True,
             retry_on_context_full: bool = False,
             output_callback: Callable[[str], None] | None = None,
-            is_system_info_callback: Callable[[str], bool] | None = None) -> AIChatResponse:
+            is_system_info_callback: Callable[[str], bool] | None = None,
+            cancel_event: Event | None = None) -> AIChatResponse:
         """Call the chat completions API, resolve any tool calls and return the new messages generated"""
 
         # Default to empty history
@@ -271,6 +273,17 @@ class AIClient:
 
         # Repeat until all tool calls resolved
         while True:
+
+            # Check for cancellation.
+            if cancel_event and cancel_event.is_set():
+
+                # Add a fake assistant message to terminate the message group
+                assistant_message = ChatCompletionAssistantMessageParam(
+                    role="assistant",
+                    content="[INTERRUPTED]"
+                )
+                history.add([assistant_message])
+                return AIChatResponse(history=history, new_messages=new_messages)
 
             # Trim history if estimated token size exceeds threshold
             history.trim_to_limit(self.config.prompt_token_limit, is_system_info_callback)

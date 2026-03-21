@@ -58,19 +58,23 @@ class AIAgent:
         self.user_last_active = datetime.now()
 
         # Event queue
+        self.cancel_chat_completion_event = asyncio.Event()
         self.event_queue = asyncio.PriorityQueue()
         asyncio.create_task(self._queue_worker())
 
-    def user_input(self, input: str):        
+    def user_input(self, input: str):
+        # Cancel any existing chat completion, and submit with PRIORITY_USER
+        # Message will be processed ahead of any system events etc.
+        self.cancel_chat_completion_event.set()
         self._queue_event(UserInputEvent(type="user", input=input), PRIORITY_USER)
-
-    def system_event(self, data, priority: int = PRIORITY_SYSTEM):
-        self._queue_event(SystemEvent(type="system", data=data), priority)
 
     def voice_event(self, text: str):
         if self.output_callback:
             self.output_callback(f"VOICE INPUT: {text}")
-        self._queue_event(UserInputEvent(type="user", input=f"[Voice input]: {text}"), PRIORITY_USER)
+        self.user_input(f"[Voice input]: {text}")
+
+    def system_event(self, data, priority: int = PRIORITY_SYSTEM):
+        self._queue_event(SystemEvent(type="system", data=data), priority)
 
     def _queue_event(self, event: AgentEvent, priority: int):
         self.event_queue.put_nowait(PrioritisedEvent(priority=priority, event=event))
@@ -126,6 +130,7 @@ class AIAgent:
 
         # Call client
         try:
+            self.cancel_chat_completion_event.clear()
             chat_response = await self.client.chat(
                 system_prompt=self.prompts.main,
                 user_prompt=user_prompt,
@@ -133,7 +138,8 @@ class AIAgent:
                 tools=self.tools,
                 output_callback=self._filter_output,
                 is_system_info_callback=self._is_system_info_content,
-                retry_on_context_full=True
+                retry_on_context_full=True,
+                cancel_event=self.cancel_chat_completion_event
             )
 
         except AIClientError as e:
