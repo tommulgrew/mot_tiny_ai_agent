@@ -1,8 +1,9 @@
 import asyncio
+from dataclasses import dataclass, field
 import logging
 import json
 from datetime import datetime
-from typing import Any, Callable, Literal
+from typing import Any, Callable, Literal, Union
 import humanize
 from pydantic import BaseModel
 from ai_client import AIChatMessageHistory, AIClient, AIClientError
@@ -17,6 +18,18 @@ class UserInputEvent(BaseModel):
 class SystemEvent(BaseModel):
     type: Literal["system"]
     data: Any       # Must be serializable to JSON
+
+AgentEvent = Union[UserInputEvent, SystemEvent]
+
+@dataclass(order=True)
+class PrioritisedEvent:
+    priority: int
+    event: AgentEvent = field(compare=False)
+
+# Priorities
+PRIORITY_USER = 0
+PRIORITY_SYSTEM = 1
+PRIORITY_SYSTEM_LOWER = 2
 
 class AIAgentPrompts(BaseModel):
     main: str           # Main agent system prompt
@@ -45,27 +58,28 @@ class AIAgent:
         self.user_last_active = datetime.now()
 
         # Event queue
-        self.event_queue = asyncio.Queue()
+        self.event_queue = asyncio.PriorityQueue()
         asyncio.create_task(self._queue_worker())
 
     def user_input(self, input: str):        
-        self._queue_event(UserInputEvent(type="user", input=input))
+        self._queue_event(UserInputEvent(type="user", input=input), PRIORITY_USER)
 
-    def system_event(self, data):
-        self._queue_event(SystemEvent(type="system", data=data))
+    def system_event(self, data, priority: int = PRIORITY_SYSTEM):
+        self._queue_event(SystemEvent(type="system", data=data), priority)
 
     def voice_event(self, text: str):
         if self.output_callback:
             self.output_callback(f"VOICE INPUT: {text}")
-        self._queue_event(UserInputEvent(type="user", input=f"[Voice input]: {text}"))
+        self._queue_event(UserInputEvent(type="user", input=f"[Voice input]: {text}"), PRIORITY_USER)
 
-    def _queue_event(self, event: UserInputEvent | SystemEvent):
-        self.event_queue.put_nowait(event)
+    def _queue_event(self, event: AgentEvent, priority: int):
+        self.event_queue.put_nowait(PrioritisedEvent(priority=priority, event=event))
 
     async def _queue_worker(self):
         """Main queue worker loop"""
         while True:
-            event: UserInputEvent | SystemEvent = await self.event_queue.get()
+            prioritised_event: PrioritisedEvent = await self.event_queue.get()
+            event = prioritised_event.event
             
             try:
                 # Process event
