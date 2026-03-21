@@ -8,7 +8,7 @@ parameters) that fit comfortably on a mid-range graphics card. It connects to
 [LM Studio](https://lmstudio.ai/) to run the model, and gives the AI a small,
 curated set of practical tools it can use to actually help you day-to-day.
 
-tinyagent does not try to be OpenClaw! It doesn't support MCP. Rather it is a
+tinyagent does not try to be OpenClaw! It doesn't support MCP. Rather it is an
 agent harness tuned for small context windows and sandboxed to allow smaller
 less powerful LLMs to make mistakes without disasterous consequences.
 
