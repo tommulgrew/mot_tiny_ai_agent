@@ -3,6 +3,7 @@ from dataclasses import dataclass, field
 import logging
 import json
 from datetime import datetime
+from pathlib import Path
 from typing import Any, Callable, Literal, Union
 import humanize
 from pydantic import BaseModel
@@ -47,6 +48,7 @@ class AIAgent:
     """A basic autonomous AI agent"""
     def __init__(self, config: AgentConfig, client: AIChatClient, memory: AIMemory, tools: AITools | None, output_callback: Callable[[str], None] | None = None):
         self.logger = logging.getLogger("tinyagent.agent")
+        self.message_history_storage_path = Path("chat_context.jsonl")
         self.config = config
         self.client = client
         self.message_accessor = client.get_message_accessor()
@@ -57,6 +59,7 @@ class AIAgent:
         self.output_callback = output_callback
         self.prompts = create_ai_prompts(users_name=config.users_name, agents_name=config.agents_name, extra_info=config.extra_info)
         self.message_history = AIChatMessageHistory(message_accessor=self.message_accessor)
+        self._load_message_history()
         self.user_last_active = datetime.now()
 
         # Event queue
@@ -151,6 +154,7 @@ class AIAgent:
 
         # Preserve history
         self.message_history = chat_response.history
+        self._save_message_history()
 
         return chat_response.new_messages
     
@@ -185,6 +189,21 @@ class AIAgent:
     async def _recall_memories_tool(self, keywords: str) -> str:
         memories = self.memory.retrieve(keywords, housekeeping=False)
         return json.dumps(memories) if memories else "No memories found"
+
+    def _load_message_history(self):
+        if self.message_history_storage_path.exists():
+            file_text = self.message_history_storage_path.read_text(encoding="utf-8")            
+            lines = file_text.splitlines()
+            token_count = int(lines[0])
+            message_lines = lines[1:]
+            messages = [self.message_accessor.from_jsonl(line) for line in message_lines]
+            self.message_history.messages = messages
+            self.message_history.token_count = token_count
+
+    def _save_message_history(self):
+        message_text = "\n".join(self.message_accessor.to_jsonl(m) for m in self.message_history.messages)
+        file_text = f"{self.message_history.token_count}\n{message_text}"
+        self.message_history_storage_path.write_text(file_text, encoding="utf-8")
 
 def create_ai_prompts(users_name: str | None, agents_name: str | None, extra_info: list[str] | None) -> AIAgentPrompts:
 

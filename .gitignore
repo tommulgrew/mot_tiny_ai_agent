@@ -219,5 +219,6 @@ memory.json
 reminders.json
 email_state.json
 tasks.json
+chat_context.jsonl
 log.txt
 *_log.txt

@@ -1,3 +1,4 @@
+import json
 from openai.types.chat import ChatCompletionMessageParam
 from ai.message_accessor import AIMessageAccessor
 
@@ -17,3 +18,7 @@ class OpenAIMessageAccessor(AIMessageAccessor):
     def is_tool_message(self, message) -> bool:
         return message.get('role', '') == "tool"
 
+    def to_jsonl(self, message) -> str:
+        if hasattr(message, 'model_dump_json'):
+            return message.model_dump_json()
+        return json.dumps(message)

@@ -12,7 +12,7 @@ from config import ModelConfig
 from util import create_logger, log_dump
 from openai_impl.openai_message_accessor import OpenAIMessageAccessor
 from openai import AsyncClient, BadRequestError
-from openai.types.chat import ChatCompletionMessageParam, ChatCompletionAssistantMessageParam, ChatCompletionSystemMessageParam, ChatCompletionMessageToolCallParam, ChatCompletionFunctionToolParam, ChatCompletionToolMessageParam, ChatCompletionUserMessageParam
+from openai.types.chat import ChatCompletionMessageFunctionToolCall, ChatCompletionMessageParam, ChatCompletionAssistantMessageParam, ChatCompletionSystemMessageParam, ChatCompletionMessageToolCallParam, ChatCompletionFunctionToolParam, ChatCompletionToolMessageParam, ChatCompletionUserMessageParam
 from openai.types.chat.chat_completion_tool_param import FunctionDefinition
 
 class OpenAIChatClient(AIChatClient):
@@ -120,8 +120,16 @@ class OpenAIChatClient(AIChatClient):
             msg = choice.message
             content = msg.content
 
-            # Cast tool calls to param tool calls (to keep Pyright happy - objects have identical fields)
-            tool_call_params = cast(list[ChatCompletionMessageToolCallParam], msg.tool_calls) if msg else []
+            # Convert tool call params to expected type
+            tool_call_params = []
+            if msg.tool_calls:
+                for tc in msg.tool_calls:
+                    assert isinstance(tc, ChatCompletionMessageFunctionToolCall), f"Unexpected tool call type: {type(tc)}"
+                    tool_call_params.append(ChatCompletionMessageToolCallParam(
+                            id=tc.id,
+                            type="function",
+                            function={"name": tc.function.name, "arguments": tc.function.arguments}
+                        ))
 
             # Add assistant message to conversation (*with* thinking, so thought chain isn't broken across tool calls)            
             assistant_message = ChatCompletionAssistantMessageParam(
