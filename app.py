@@ -56,14 +56,16 @@ class App:
     def _create_ai_tools(self) -> AITools:
         tools = AITools()
 
-        reminder_tools = ReminderTools(Path("reminders.json"), self._reminder_callback)
-        asyncio.create_task(reminder_tools.check_task())
-        tools.add(reminder_tools.make_tools())
+        if self.config.reminders:
+            reminder_tools = ReminderTools(Path(self.config.reminders.storage_path), self._reminder_callback)
+            asyncio.create_task(reminder_tools.check_task())
+            tools.add(reminder_tools.make_tools())
 
         tools.add(BrowserTools().make_tools())
         if self.config.file_tools:
             tools.add(FileTools(self.config.file_tools).make_tools())
-        tools.add(SpeakTools().make_tools())
+        if self.config.speak and self.config.speak.enabled:
+            tools.add(SpeakTools().make_tools())
         if self.config.allowed_apps:
             tools.add(AppTools(self.config.allowed_apps).make_tools())
         if self.config.email:

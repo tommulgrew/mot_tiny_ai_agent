@@ -131,6 +131,30 @@
                 }
             }
         },
+        "reminders": {
+            "type": "object",
+            "additionalProperties": false,
+            "description": "Reminder tool configuration. Omit to disable the reminder tools.",
+            "properties": {
+                "storage_path": {
+                    "type": "string",
+                    "default": "reminders.json",
+                    "description": "Path to JSON file storing active reminders."
+                }
+            }
+        },
+        "speak": {
+            "type": "object",
+            "additionalProperties": false,
+            "description": "Text-to-speech tool configuration. Omit to disable the speak tool.",
+            "properties": {
+                "enabled": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "Whether the speak tool is enabled."
+                }
+            }
+        },
         "todo": {
             "type": "object",
             "additionalProperties": false,

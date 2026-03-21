@@ -17,11 +17,17 @@
     "agent": {
         "users_name": "Tom",
         "agents_name": "Alfred",
-        "extra_info": []
+        "extra_info": [ ]
     },
     "speech_to_text": {
         "enabled": true,
         "trigger_key": "alt_gr"
+    },
+    "reminders": {
+        "storage_path": "reminders.json"
+    },
+    "speak": {
+        "enabled": true
     },
     "todo": {
         "storage_path": "tasks.json",

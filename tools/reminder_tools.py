@@ -182,8 +182,3 @@ def _advance(dt: datetime, recurrence: str) -> datetime:
         day = min(dt.day, calendar.monthrange(year, month)[1])
         return dt.replace(year=year, month=month, day=day)
     raise ValueError(f"Unknown recurrence: {recurrence}")
-
-
-def load_reminder_storage_path(config_dict: dict) -> Path:
-    rc = config_dict.get("reminders", {})
-    return Path(rc.get("storage_path", "reminders.json"))

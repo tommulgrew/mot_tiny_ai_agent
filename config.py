@@ -40,6 +40,14 @@ class AppConfig(BaseModel):
     path: str
     description: str | None = None
 
+# Speak tools config
+class SpeakConfig(BaseModel):
+    enabled: bool = True
+
+# Reminder tools config
+class ReminderConfig(BaseModel):
+    storage_path: str = "reminders.json"
+
 # Todo tools config
 class TodoConfig(BaseModel):
     storage_path: str = "tasks.json"
@@ -78,6 +86,8 @@ class Config(BaseModel):
     allowed_apps: list[AppConfig] | None = None
     email: EmailConfig | None = None
     todo: TodoConfig | None = None
+    reminders: ReminderConfig | None = None
+    speak: SpeakConfig | None = None
 
 def load_config(path: str) -> Config:
     with open(path, encoding="utf-8") as f:
