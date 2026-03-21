@@ -169,7 +169,8 @@ All settings live in `config.json` (validated against `config-schema.json`).
     "prompt_token_limit": 11000
 }
 ```
-Set `prompt_token_limit` a little below your model's actual context size — this is when the agent starts trimming older conversation history to make room.
+Set `prompt_token_limit` a little below your model's actual context size — this
+is when the agent starts trimming older conversation history to make room.
 
 ### `agent`
 ```json
@@ -179,7 +180,9 @@ Set `prompt_token_limit` a little below your model's actual context size — thi
     "extra_info": []
 }
 ```
-`extra_info` lets you add standing instructions to the agent's system prompt — for example your timezone, preferences, or recurring rules like *"always summarise emails longer than a few paragraphs"*.
+`extra_info` lets you add standing instructions to the agent's system prompt — 
+for example your timezone, preferences, or recurring rules like *"always 
+summarise emails longer than a few paragraphs"*.
 
 ### `memory`
 ```json
@@ -198,7 +201,9 @@ Set `prompt_token_limit` a little below your model's actual context size — thi
     "trash_path": "C:\\ai\\trash"
 }
 ```
-Give each folder a short alias — the agent uses these names rather than full paths. Access is `"rw"` (read/write) or `"ro"` (read-only). Deleted files go to `trash_path` rather than being permanently deleted.
+Give each folder a short alias — the agent uses these names rather than full 
+paths. Access is `"rw"` (read/write) or `"ro"` (read-only). Deleted files go to
+`trash_path` rather than being permanently deleted.
 
 ### `reminders` *(optional)*
 ```json
@@ -206,7 +211,8 @@ Give each folder a short alias — the agent uses these names rather than full p
     "storage_path": "reminders.json"
 }
 ```
-Enables the reminder tools (`create_reminder`, `list_reminders`, `delete_reminder`). Omit the section to disable them.
+Enables the reminder tools (`create_reminder`, `list_reminders`, 
+`delete_reminder`). Omit the section to disable them.
 
 ### `speak` *(optional)*
 ```json
@@ -214,7 +220,8 @@ Enables the reminder tools (`create_reminder`, `list_reminders`, `delete_reminde
     "enabled": true
 }
 ```
-Enables the `speak` tool, which reads text aloud via text-to-speech. Omit the section (or set `"enabled": false`) to disable it.
+Enables the `speak` tool, which reads text aloud via text-to-speech. Omit the 
+section (or set `"enabled": false`) to disable it.
 
 ### `todo` *(optional)*
 ```json
@@ -236,7 +243,9 @@ Enables the `speak` tool, which reads text aloud via text-to-speech. Omit the se
     "poll_interval_seconds": 300
 }
 ```
-Multiple inboxes are supported. Passwords are stored securely in your OS keyring (Windows Credential Manager on Windows) — you'll be prompted on first run. To update a stored password later:
+Multiple inboxes are supported. Passwords are stored securely in your OS keyring
+(Windows Credential Manager on Windows) — you'll be prompted on first run. To 
+update a stored password later:
 
 ```bash
 python manage_keyring.py set you@gmail.com
@@ -251,9 +260,13 @@ python manage_keyring.py set you@gmail.com
     "language": "en"
 }
 ```
-Hold the trigger key to record, release to transcribe and send. Uses [faster-whisper](https://github.com/SYSTRAN/faster-whisper) locally — no audio leaves your machine. `model_size` can be `tiny`, `small`, `medium`, or `large` — `small` is a good balance of speed and accuracy.
+Hold the trigger key to record, release to transcribe and send. Uses 
+[faster-whisper](https://github.com/SYSTRAN/faster-whisper) locally — no audio 
+leaves your machine. `model_size` can be `tiny`, `small`, `medium`, or `large` 
+— `small` is a good balance of speed and accuracy.
 
-If you don't want voice input, set `"enabled": false` or remove the section entirely.
+If you don't want voice input, set `"enabled": false` or remove the section 
+entirely.
 
 ### `allowed_apps` *(optional)*
 ```json
@@ -267,6 +280,9 @@ The agent can only launch applications listed here.
 
 ## Notes
 
-- The agent works best with models trained for extended thinking and tool use. Qwen3.5 9B is the primary tested model.
-- Context window management is handled automatically — older history is trimmed gradually (think blocks first, then older messages) to stay within the configured token limit.
+- The agent works best with models trained for extended thinking and tool use. 
+  Qwen3.5 9B is the primary tested model.
+- Context window management is handled automatically — older history is trimmed
+  gradually (think blocks first, then older messages) to stay within the 
+  configured token limit.
 - tinyagent is a personal project and a work in progress. Expect rough edges.
