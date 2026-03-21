@@ -10,7 +10,7 @@ curated set of practical tools it can use to actually help you day-to-day.
 
 tinyagent does not try to be OpenClaw! It doesn't support MCP. Rather it is an
 agent harness tuned for small context windows and sandboxed to allow smaller
-less powerful LLMs to make mistakes without disasterous consequences.
+less powerful LLMs make mistakes without disasterous consequences.
 
 tinyagent is a little slow, and sometimes gets confused, like offering to 
 perform email actions it doesn't have the tools for. But for an AI agent that 
