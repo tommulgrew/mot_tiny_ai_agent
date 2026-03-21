@@ -3,7 +3,7 @@ import shutil
 import subprocess
 import re
 from pathlib import Path
-from ai_tools import AIToolParam, AITool, AIToolError
+from ai.tools import AIToolParam, AITool, AIToolError
 from config import FileToolsConfig, FolderConfig
 
 class AbortFileSearchException(Exception):

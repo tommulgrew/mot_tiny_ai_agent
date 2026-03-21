@@ -8,7 +8,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Callable
 
-from ai_tools import AIToolParam, AITool, AIToolError
+from ai.tools import AIToolParam, AITool, AIToolError
 
 VALID_RECURRENCES = ("daily", "weekly", "monthly")
 

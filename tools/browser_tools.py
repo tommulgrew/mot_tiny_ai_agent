@@ -1,7 +1,7 @@
 import asyncio
 import webbrowser
 
-from ai_tools import AIToolParam, AITool
+from ai.tools import AIToolParam, AITool
 
 class BrowserTools:
     def make_tools(self) -> list[AITool]:

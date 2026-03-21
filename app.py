@@ -5,9 +5,9 @@ from typing import Callable
 from ai_memory import AIMemory
 from config import load_config
 import asyncio
-from ai_client import AIClient
+from openai_impl.openai_client import OpenAIClient
 from ai_agent import AIAgent
-from ai_tools import AITools
+from ai.tools import AITools
 from speech_input import SpeechToTextInput
 from tools.app_tools import AppTools
 from tools.browser_tools import BrowserTools
@@ -28,7 +28,7 @@ class App:
         self.output_callback = output_callback
 
         # Wire up agent
-        client = AIClient(config=self.config.model)
+        client = OpenAIClient(config=self.config.model)
         memory = AIMemory(
             client=client, 
             config=self.config.memory, 

@@ -6,8 +6,9 @@ from datetime import datetime
 from typing import Any, Callable, Literal, Union
 import humanize
 from pydantic import BaseModel
-from ai_client import AIChatMessageHistory, AIClient, AIClientError
-from ai_tools import AITool, AITools, AIToolParam
+from ai.client import AIChatClient, AIChatMessageHistory
+from ai.errors import AIClientError
+from ai.tools import AITool, AITools, AIToolParam
 from ai_memory import AIMemory
 from config import AgentConfig
 
@@ -44,17 +45,18 @@ class AgentSystemInfoMessage(BaseModel):
 
 class AIAgent:
     """A basic autonomous AI agent"""
-    def __init__(self, config: AgentConfig, client: AIClient, memory: AIMemory, tools: AITools | None, output_callback: Callable[[str], None] | None = None):
+    def __init__(self, config: AgentConfig, client: AIChatClient, memory: AIMemory, tools: AITools | None, output_callback: Callable[[str], None] | None = None):
         self.logger = logging.getLogger("tinyagent.agent")
         self.config = config
         self.client = client
+        self.message_accesor = client.get_message_accessor()
         self.memory = memory
         self.tools = tools
         if self.tools:
             self.tools.add([self._make_recall_memories_tool()])
         self.output_callback = output_callback
         self.prompts = create_ai_prompts(users_name=config.users_name, agents_name=config.agents_name, extra_info=config.extra_info)
-        self.message_history = AIChatMessageHistory()
+        self.message_history = AIChatMessageHistory(message_accessor=self.message_accesor)
         self.user_last_active = datetime.now()
 
         # Event queue
@@ -159,8 +161,8 @@ class AIAgent:
 
     def _is_system_info_msg(self, msg) -> bool:
         return(
-            self.client.is_user_message(msg) and
-            self._is_system_info_content(self.client.get_message_content(msg))
+            self.message_accesor.is_user_message(msg) and
+            self._is_system_info_content(self.message_accesor.get_content(msg))
         )
 
     def _is_system_info_content(self, content: str) -> bool:

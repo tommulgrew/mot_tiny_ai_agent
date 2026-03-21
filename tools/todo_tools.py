@@ -4,7 +4,7 @@ from dataclasses import asdict, dataclass
 from datetime import datetime
 from pathlib import Path
 
-from ai_tools import AITool, AIToolError, AIToolParam
+from ai.tools import AITool, AIToolError, AIToolParam
 from config import TodoConfig
 
 VALID_PRIORITIES = ("high", "medium", "low")

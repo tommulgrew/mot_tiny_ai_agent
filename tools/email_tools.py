@@ -17,7 +17,7 @@ from typing import Callable, Generator
 
 import keyring
 
-from ai_tools import AITool, AIToolError, AIToolParam
+from ai.tools import AITool, AIToolError, AIToolParam
 from config import AgentInboxConfig, EmailConfig, ImapConfig, NamedImapConfig
 
 

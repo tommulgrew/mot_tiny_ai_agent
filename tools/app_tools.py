@@ -1,5 +1,5 @@
 import subprocess
-from ai_tools import AIToolError, AIToolParam, AITool
+from ai.tools import AIToolError, AIToolParam, AITool
 from config import AppConfig
 
 class AppTools:

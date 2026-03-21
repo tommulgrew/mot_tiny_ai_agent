@@ -8,8 +8,10 @@ from typing import Callable, Literal
 from pydantic import BaseModel
 import Stemmer
 import humanize
-from ai_client import AIClient, AIClientTokenOverflowError
-from ai_tools import AITools, AITool, AIToolParam
+from ai.client import AIChatClient
+from ai.errors import AIClientTokenOverflowError
+from ai.message_accessor import AIMessageAccessor
+from ai.tools import AITools, AITool, AIToolParam
 from config import AgentConfig, MemoryConfig
 from util import create_logger
 
@@ -63,10 +65,11 @@ class CreateMemoriesData(BaseModel):
 class AIMemory:
     """Basic AI memory service, for extracting and retrieving memories during conversation"""
     
-    def __init__(self, client: AIClient, config: MemoryConfig, agent_config: AgentConfig):
+    def __init__(self, client: AIChatClient, config: MemoryConfig, agent_config: AgentConfig):
         self.logger = create_logger("tinyagent.memory", "memory_log.txt")
 
         self.client = client
+        self.message_accessor: AIMessageAccessor = client.get_message_accessor()
         self.storage_path = Path(config.storage_path)
         self.users_name = agent_config.users_name
         self.agents_name = agent_config.agents_name
@@ -100,8 +103,8 @@ class AIMemory:
 
         # Format data as JSON
         data = CreateMemoriesData(
-            user_message=self.client.get_message_content(new_messages[0]),
-            chatbot_response="\n".join(self.client.get_message_content(m) for m in new_messages[1:]),
+            user_message=self.message_accessor.get_content(new_messages[0]),
+            chatbot_response="\n".join(self.message_accessor.get_content(m) for m in new_messages[1:]),
             active_memories=active_memories
         )
         data_json = data.model_dump_json()
@@ -161,7 +164,7 @@ class AIMemory:
     async def _do_chat_tool_operation(self, system_prompt: str, user_prompt: str, tools: AITools):
         try:
             async with self.llm_lock:               # Prevent concurrent LLM calls
-                _,_ = await self.client.chat(
+                _ = await self.client.chat(
                     system_prompt=system_prompt,
                     user_prompt=user_prompt,
                     tools=tools
