@@ -108,7 +108,8 @@ pip install -r requirements.txt
 
 **3. Configure**
 
-Copy `config.json` and edit it for your setup. At minimum you'll need to set:
+Copy `config.example.json` to `config.json` and edit it for your setup. At 
+minimum you'll need to set:
 - `model` — your LM Studio model name and server URL.
     - Also set the `prompt_token_limit` to the token context length you will be 
       using minus about 4-5K. E.g. for a 16000 token context, set it to about 

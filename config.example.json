@@ -1,0 +1,26 @@
+{
+    "$schema": "config-schema.json",
+    "model": {
+        "name": "qwen/qwen3.5-9b",
+        "prompt_token_limit": 11000
+    },
+    "agent": {
+        "users_name": "[your name here]",
+        "agents_name": "[agent's name here]"
+    },
+    "reminders": {
+        "storage_path": "reminders.json"
+    },
+    "speak": {
+        "enabled": true
+    },
+    "speech_to_text": {
+        "enabled": true,
+        "trigger_key": "alt_gr"
+    },
+    "todo": {
+        "storage_path": "tasks.json",
+        "completed_log_path": "tasks_completed.jsonl",
+        "list_limit": 50
+    }
+}
