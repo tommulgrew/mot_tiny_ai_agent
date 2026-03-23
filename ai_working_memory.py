@@ -97,15 +97,15 @@ class AIWorkingMemory:
 def _validate_duration(duration: str) -> str:
     d = duration.lower().strip()
     if d not in VALID_DURATIONS:
-        raise AIToolError(f'Invalid duration "{duration}". Use "hour", "day", "week", "month", or "permanent"')
+        raise AIToolError(f'Invalid duration "{duration}". Use "today", "hours", "days", "permanent"')
     return d
 
 def _get_expiry_datetime(dt: datetime, duration: str, count: int) -> datetime | None:
     if duration == "today":
         return (dt + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
-    if duration == "hour":
+    if duration == "hours":
         return dt + timedelta(hours=count)
-    if duration == "day":
+    if duration == "days":
         return dt + timedelta(days=count)
     if duration == "permanent":
         return None
