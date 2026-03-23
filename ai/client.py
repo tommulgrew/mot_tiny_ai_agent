@@ -20,6 +20,7 @@ class AIChatClient(ABC):
             user_prompt: str | list[str],
             history: AIChatMessageHistory | None = None,                        # Previous chat history
             tools: AITools | None = None,                                       # Tool calls
+            additional_context_prompt: str | list[str] | None = None,           # Additional context added as user messages that are NOT persisted in the history
             strip_think: bool = True,                                           # Whether to strip think blocks from response
             retry_on_context_full: bool = False,                                # Whether to retry on context overflow
             output_callback: Callable[[str], None] | None = None,               # Callback for text output

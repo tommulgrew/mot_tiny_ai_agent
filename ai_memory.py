@@ -142,7 +142,7 @@ class AIMemory:
         while True:
             task: CreateMemoriesTask = await self.extraction_queue.get()
             try:
-                await self._create_memories(task.conversation)
+                pass # await self._create_memories(task.conversation)
             finally:
                 self.extraction_queue.task_done()
 

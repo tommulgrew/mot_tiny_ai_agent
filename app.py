@@ -41,7 +41,8 @@ class App:
         self.agent = AIAgent(
             config=self.config.agent,
             client=client, 
-            memory=memory, 
+            memory=memory,
+            working_memory=working_memory, 
             tools=tools, 
             output_callback=output_callback
         )

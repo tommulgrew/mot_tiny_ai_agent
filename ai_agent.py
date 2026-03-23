@@ -11,6 +11,7 @@ from ai.client import AIChatClient, AIChatMessageHistory
 from ai.errors import AIClientError
 from ai.tools import AITool, AITools, AIToolParam
 from ai_memory import AIMemory
+from ai_working_memory import AISavedWorkingMemory, AIWorkingMemory
 from config import AgentConfig
 
 class UserInputEvent(BaseModel):
@@ -44,15 +45,26 @@ class AgentSystemInfo(BaseModel):
 class AgentSystemInfoMessage(BaseModel):
     system_info: AgentSystemInfo
 
+class AgentWorkingMemoriesMessage(BaseModel):
+    working_memories: list[str]
+
 class AIAgent:
     """A basic autonomous AI agent"""
-    def __init__(self, config: AgentConfig, client: AIChatClient, memory: AIMemory, tools: AITools | None, output_callback: Callable[[str], None] | None = None):
+    def __init__(
+            self, 
+            config: AgentConfig, 
+            client: AIChatClient, 
+            memory: AIMemory,
+            working_memory: AIWorkingMemory | None,
+            tools: AITools | None, 
+            output_callback: Callable[[str], None] | None = None):
         self.logger = logging.getLogger("tinyagent.agent")
         self.message_history_storage_path = Path("chat_context.jsonl")
         self.config = config
         self.client = client
         self.message_accessor = client.get_message_accessor()
         self.memory = memory
+        self.working_memory = working_memory
         self.tools = tools
         if self.tools:
             self.tools.add([self._make_recall_memories_tool()])
@@ -124,14 +136,25 @@ class AIAgent:
             )
         )
 
+        # Add working memories as extra context info
+        working_memories = self.working_memory.get_memories() if self.working_memory else []
+        working_memories_message = AgentWorkingMemoriesMessage(
+            working_memories=[_format_working_memory(m) for m in working_memories]
+        ) if working_memories else None
+
         # Call chat client
-        new_messages = await self._call_chat_client([ system_info.model_dump_json(), content ])
+        new_messages = await self._call_chat_client(
+            user_prompt=[ system_info.model_dump_json(), content ], 
+            additional_context_prompt=working_memories_message.model_dump_json() if working_memories_message else None)
 
         # Record memories
         memory_messages = [m for m in new_messages if not self._is_system_info_msg(m)]        
         self.memory.create_memories(memory_messages, memories)
 
-    async def _call_chat_client(self, user_prompt: list[str] | str) -> list:
+    async def _call_chat_client(
+            self, 
+            user_prompt: list[str] | str, 
+            additional_context_prompt: list[str] | str | None = None) -> list:
 
         # Call client
         try:
@@ -141,6 +164,7 @@ class AIAgent:
                 user_prompt=user_prompt,
                 history=self.message_history,
                 tools=self.tools,
+                additional_context_prompt=additional_context_prompt,
                 output_callback=self._filter_output,
                 is_system_info_callback=self._is_system_info_content,
                 retry_on_context_full=True,
@@ -205,6 +229,14 @@ class AIAgent:
         file_text = f"{self.message_history.token_count}\n{message_text}"
         self.message_history_storage_path.write_text(file_text, encoding="utf-8")
 
+def _format_working_memory(memory: AISavedWorkingMemory) -> str:
+    expires = (
+        f"expires: { humanize.naturaltime(datetime.now() - memory.when_expires) }" 
+        if memory.when_expires 
+        else "permanent"
+    )
+    return f"[id={memory.id}]: {memory.memory} ({expires})"
+
 def create_ai_prompts(users_name: str | None, agents_name: str | None, extra_info: list[str] | None) -> AIAgentPrompts:
 
     extra_info_lines = []
@@ -252,6 +284,17 @@ Output - respond in one of three ways:
 - Only use "complete_todo_item" after the user has confirmed they are complete.
 - Likewise only use "delete_todo_item" when the user agrees the item is incorrect.
 - If the to-do list fills up and no more items can be added, consult with the user about whether existing items can be deleted to make room.
+
+"working_memory" tools:
+- Record instructions or rules that must always be kept in mind (duration="permanent")
+  e.g. "Don't use 'speak' between 10PM and 6AM", "Alert me to emails from the bank"
+- Record day-to-day state, such as whether you've already given the morning briefing (duration="today")
+- Record time-limited tasks or reminders to yourself (duration=hours/days)
+
+Do NOT "working_memory" tools use for:
+- Trivial or transient events (under ~10 minutes — they'll still be in the context window)
+- General facts about the user or world — these are handled automatically by the background memory service
+  e.g. "Mary enjoys swimming", "User has a dog"
 
 {extra_info_text if extra_info_text else ""}\
 """)

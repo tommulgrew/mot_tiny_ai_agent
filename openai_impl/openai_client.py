@@ -30,10 +30,11 @@ class OpenAIChatClient(AIChatClient):
         self.chat_logger = create_logger("tinyagent.completions", "completions_log.txt", propagate=False)
 
     async def chat(self, 
-            system_prompt: str, 
+            system_prompt: str,
             user_prompt: str | list[str],
             history: AIChatMessageHistory | None = None,
             tools: AITools | None = None,
+            additional_context_prompt: str | list[str] | None = None,
             strip_think: bool = True,
             retry_on_context_full: bool = False,
             output_callback: Callable[[str], None] | None = None,
@@ -46,6 +47,7 @@ class OpenAIChatClient(AIChatClient):
 
         # Normalise user_prompt into an array
         user_prompts = [ user_prompt ] if isinstance(user_prompt, str) else user_prompt
+        additional_context_prompts = [ additional_context_prompt ] if isinstance(additional_context_prompt, str) else additional_context_prompt
 
         # Create message objects
         system_message = ChatCompletionSystemMessageParam(
@@ -59,6 +61,13 @@ class OpenAIChatClient(AIChatClient):
             )
             for p in user_prompts
         ]
+        additional_context_messages = [
+            ChatCompletionUserMessageParam(
+                role="user",
+                content=p
+            )
+            for p in additional_context_prompts
+        ] if additional_context_prompts else []
 
         # Add to history
         history.add(user_messages)
@@ -94,14 +103,14 @@ class OpenAIChatClient(AIChatClient):
             # Trim history if estimated token size exceeds threshold
             self.context_manager.trim_to_limit(history, self.config.prompt_token_limit, is_system_info_callback)
 
-            self.chat_logger.debug("Chat API request: %s", log_dump([ system_message, *history.messages ]))            
+            self.chat_logger.debug("Chat API request: %s", log_dump([ system_message, *additional_context_messages, *history.messages ]))            
 
             # Call chat completion service
             response = None
             while not response:
                 try:
                     response = await self.client.chat.completions.create(
-                            messages=[ system_message, *history.messages], 
+                            messages=[ system_message, *additional_context_messages, *history.messages], 
                             model=self.config.name,
                             tools=completion_tools
                         )
@@ -119,6 +128,11 @@ class OpenAIChatClient(AIChatClient):
             choice = response.choices[0]
             msg = choice.message
             content = msg.content
+
+            # Sometimes content is returned in "reasoning_content" instead of "content".
+            # (Even though its regular content, not <think> content)
+            if not content:
+                content = msg.model_extra.get("reasoning_content") if msg.model_extra else ""
 
             # Convert tool call params to expected type
             tool_call_params = []

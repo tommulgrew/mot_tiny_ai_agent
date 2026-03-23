@@ -1,6 +1,8 @@
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from datetime import datetime, timedelta
+import json
 import logging
+from pathlib import Path
 
 from ai.tools import AITool, AIToolError, AIToolParam
 from config import MemoryConfig
@@ -47,13 +49,32 @@ class AIWorkingMemory:
             )
         ]
 
-    def _load(self):
-        # To do
-        pass
+    def get_memories(self) -> list[AISavedWorkingMemory]:
+        self._prune_expired_memories()
+        return [*self._memories]
 
     def _save(self):
-        # To do
-        pass
+        data = {
+            "id_generator": self._id_generator,
+            "memories": [asdict(m) for m in self._memories]
+        }
+        Path(self.config.working_memory_storage_path).write_text(
+            json.dumps(data, indent=2), encoding="utrf-8"
+        )
+
+    def _load(self):
+        path = Path(self.config.working_memory_storage_path)
+        if not path.exists():
+            return
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+            self._id_generator = data.get("id_generator", 0)
+            mem_data = data.get("memories")
+            if (isinstance(mem_data, dict)):
+                mem_data = mem_data.get("user", [])
+            self._memories = [AISavedWorkingMemory(**m) for m in mem_data]
+        except Exception as e:
+            self.logger.warning(f"Could not load working memories: {e}")
 
     async def _record_memory(self, memory: str, duration: str, count: int | None) -> str:
         if len(self._memories) > self.config.working_memory_limit:
@@ -93,6 +114,10 @@ class AIWorkingMemory:
         if m is None:
             raise AIToolError(f"No working memory with ID {id}.")
         return m
+
+    def _prune_expired_memories(self):
+        now = datetime.now()
+        self._memories = [m for m in self._memories if m.when_expires is None or m.when_expires > now]
 
 def _validate_duration(duration: str) -> str:
     d = duration.lower().strip()
