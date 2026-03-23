@@ -3,6 +3,7 @@ import logging
 from pathlib import Path
 from typing import Callable
 from ai_memory import AIMemory
+from ai_working_memory import AIWorkingMemory
 from config import load_config
 import asyncio
 from openai_impl.openai_client import OpenAIChatClient
@@ -34,7 +35,9 @@ class App:
             config=self.config.memory, 
             agent_config=self.config.agent
         )
+        working_memory = AIWorkingMemory(config=self.config.memory)
         tools = self._create_ai_tools()
+        tools.add(working_memory.make_tools())
         self.agent = AIAgent(
             config=self.config.agent,
             client=client, 
