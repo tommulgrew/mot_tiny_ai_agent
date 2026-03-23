@@ -22,6 +22,8 @@ class FileToolsConfig(BaseModel):
 
 class MemoryConfig(BaseModel):
     storage_path: str = "memory.json"
+    working_memory_storage_path: str = "working_memory.json"
+    working_memory_limit: int = 20
 
 class AgentConfig(BaseModel):
     users_name: str | None = None
