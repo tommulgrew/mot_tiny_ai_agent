@@ -56,10 +56,18 @@ class AIWorkingMemory:
     def _save(self):
         data = {
             "id_generator": self._id_generator,
-            "memories": [asdict(m) for m in self._memories]
+            "memories": [ 
+                {
+                    "id": m.id,
+                    "memory": m.memory,
+                    "when_created": m.when_created.isoformat(),
+                    "when_expires": m.when_expires.isoformat() if m.when_expires else None
+                }
+                for m in self._memories
+            ]
         }
         Path(self.config.working_memory_storage_path).write_text(
-            json.dumps(data, indent=2), encoding="utrf-8"
+            json.dumps(data, indent=2), encoding="utf-8"
         )
 
     def _load(self):
@@ -72,7 +80,14 @@ class AIWorkingMemory:
             mem_data = data.get("memories")
             if (isinstance(mem_data, dict)):
                 mem_data = mem_data.get("user", [])
-            self._memories = [AISavedWorkingMemory(**m) for m in mem_data]
+            self._memories = [
+                AISavedWorkingMemory(
+                    id=m["id"],
+                    memory=m["memory"],
+                    when_created=datetime.fromisoformat(m["when_created"]),
+                    when_expires=datetime.fromisoformat(m["when_expires"]) if m["when_expires"] else None
+                ) for m in mem_data
+            ]
         except Exception as e:
             self.logger.warning(f"Could not load working memories: {e}")
 

@@ -222,5 +222,6 @@ email_state.json
 tasks.json
 chat_context.jsonl
 tasks_completed.jsonl
+working_memory.json
 log.txt
 *_log.txt
