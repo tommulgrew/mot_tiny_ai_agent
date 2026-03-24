@@ -2,7 +2,7 @@
     "$schema": "config-schema.json",
     "model": {
         "name": "qwen/qwen3.5-9b",
-        "prompt_token_limit": 11000
+        "prompt_token_limit": 8000
     },
     "agent": {
         "users_name": "[your name here]",

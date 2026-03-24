@@ -167,11 +167,15 @@ All settings live in `config.json` (validated against `config-schema.json`).
 "model": {
     "name": "qwen/qwen3.5-9b",
     "url": "http://localhost:1234/v1",
-    "prompt_token_limit": 11000
+    "prompt_token_limit": 8000
 }
 ```
-Set `prompt_token_limit` a little below your model's actual context size — this
+Set `prompt_token_limit` a bit below your model's actual context size — this
 is when the agent starts trimming older conversation history to make room.
+
+The size of the prompt token can also have an impact on the response time, as 
+it can take the LLM server a few seconds to reload the context tokens during a
+chat completion call.
 
 ### `agent`
 ```json
