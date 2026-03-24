@@ -184,7 +184,7 @@ class AIAgent:
     
 
     def _filter_output(self, output: str):
-        if self.output_callback and output: # and output != "NO_OUTPUT":
+        if self.output_callback and output and output != "NO_OUTPUT":
             self.output_callback(output)
 
     def _is_system_info_msg(self, msg) -> bool:
