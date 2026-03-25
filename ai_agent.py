@@ -270,9 +270,6 @@ Output - respond in one of three ways:
 
 "create_reminder" tool:
 - Use to notify the user of upcoming events, appointments and tasks.
-- Reminder messages must not contain relative time references such as "tomorrow", "next week", or "on Tuesday".
-- Always use the resolved date and time in the message instead.
-- Example: for "remind me to put the bins out tomorrow at 6PM", create the message "Put the bins out" scheduled for the actual date — NOT "Put the bins out tomorrow".
 
 "timer" system event:
 - You will receive this every 15 minutes when the user is inactive.
@@ -295,6 +292,10 @@ Do NOT "working_memory" tools use for:
 - Trivial or transient events (under ~10 minutes — they'll still be in the context window)
 - General facts about the user or world — these are handled automatically by the background memory service
   e.g. "Mary enjoys swimming", "User has a dog"
+
+For the reminder, todo and working memory tools:
+- Do not use relative time references like "tomorrow", "next week" or "on Tuesday" — the meaning of these terms will change over time and create confusion
+- If the date must be specified in the text, use the full date, e.g. Wednesday 25th March
 
 {extra_info_text if extra_info_text else ""}\
 """)
