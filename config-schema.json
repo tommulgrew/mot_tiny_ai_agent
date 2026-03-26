@@ -77,9 +77,25 @@
             "properties": {
                 "storage_path": {
                     "type": "string",
-                    "description": "Path and filename to memory JSON file"
+                    "description": "Path and filename to long-term memory JSON file",
+                    "default": "memory.json"
+                },
+                "retrieve_memory_limit": {
+                    "type": "number",
+                    "description": "Maximum number of long-term memories retrieved",
+                    "default": 10
+                },
+                "working_memory_storage_path": {
+                    "type": "string",
+                    "description": "Path and filename to working-memory JSON file",
+                    "default": "working_memory.json"
+                },
+                "working_memory_limit": {
+                    "type": "number",
+                    "description": "Maximum number of working memories to store",
+                    "default": 15
                 }
-            }
+            }            
         },
         "agent": {
             "type": "object",

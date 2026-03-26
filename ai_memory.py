@@ -13,7 +13,7 @@ from ai.errors import AIClientTokenOverflowError
 from ai.message_accessor import AIMessageAccessor
 from ai.tools import AITools, AITool, AIToolParam
 from config import AgentConfig, MemoryConfig
-from util import create_logger
+from util import bellcurverandom, create_logger
 
 class AIMemoryPrompts(BaseModel):
     create_memories: str        # Create memories from conversation snippet
@@ -64,6 +64,7 @@ class AIMemory:
         self.logger = create_logger("tinyagent.memory", "memory_log.txt")
 
         self.client = client
+        self.config = config
         self.message_accessor: AIMessageAccessor = client.get_message_accessor()
         self.storage_path = Path(config.storage_path)
         self.users_name = agent_config.users_name
@@ -115,19 +116,20 @@ class AIMemory:
             if bool(keywords & mapping.from_keywords):
                 keywords.update(mapping.to_keywords)
 
-        memories = [ 
-            m
-            for m in self.memories 
-            if bool(keywords & set(m.keywords))     # Sets intersect
-        ]
+        # Score memories by number of matches with a random number added        
+        matches = ((m, keywords & set(m.keywords)) for m in self.memories)
+        scored = [ (m[0], len(m[1]), bellcurverandom(20)) for m in matches if bool(m[1])]
+
+        # Sort best matches to the front
+        scored.sort(key=lambda x: x[1] + x[2] * 5, reverse=True)
+        memories = [ s[0] for s in scored ]
 
         # Queue a memory housekeeping task
         if housekeeping:
             self.housekeeping_queue.put_nowait(MemoryHousekeepingTask(memories=memories))
 
-        random.shuffle(memories)
-        if len(memories) > 8:
-            memories = memories[:8]
+        if len(memories) > self.config.retrieve_memory_limit:
+            memories = memories[:self.config.retrieve_memory_limit]
 
         # Return facts
         return [m.fact for m in memories]

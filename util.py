@@ -1,5 +1,7 @@
 import json
 import logging
+import random
+from numpy import dot, linalg
 
 def log_dump(obj) -> str:
     """
@@ -19,3 +21,9 @@ def create_logger(name:str, filepath: str, level: int | None = None, propagate: 
         logger.level = level
         handler.level = level
     return logger
+
+def bellcurverandom(count: int) -> float:
+    return sum(random.random() for _ in range(count)) / count
+
+def cosine_similarity(a: list[float], b: list[float]) -> float:
+    return dot(a, b) / (linalg.norm(a) * linalg.norm(b))
