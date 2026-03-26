@@ -234,6 +234,18 @@
                 }
             }
         },
+        "web_search": {
+            "type": "object",
+            "additionalProperties": false,
+            "description": "Web search tool configuration using the Tavily API. Omit to disable. API key is stored in the OS keyring and prompted on first run.",
+            "properties": {
+                "enabled": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "Whether the web search tool is enabled."
+                }
+            }
+        },
         "allowed_apps": {
             "type": "array",
             "description": "White list of apps the agent is allowed to launch.",

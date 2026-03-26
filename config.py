@@ -56,6 +56,10 @@ class TodoConfig(BaseModel):
     completed_log_path: str = "tasks_completed.jsonl"
     list_limit: int = 50
 
+# Web search tools config
+class WebSearchConfig(BaseModel):
+    enabled: bool = True
+
 # Email tools config
 class ImapConfig(BaseModel):
     imap_host: str
@@ -90,6 +94,7 @@ class Config(BaseModel):
     todo: TodoConfig | None = None
     reminders: ReminderConfig | None = None
     speak: SpeakConfig | None = None
+    web_search: WebSearchConfig | None = None
 
 def load_config(path: str) -> Config:
     with open(path, encoding="utf-8") as f:

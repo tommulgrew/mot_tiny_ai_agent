@@ -22,5 +22,8 @@
         "storage_path": "tasks.json",
         "completed_log_path": "tasks_completed.jsonl",
         "list_limit": 50
+    },
+    "web_search": {
+        "enabled": true
     }
 }

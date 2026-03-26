@@ -17,6 +17,7 @@ from tools.file_tools import FileTools
 from tools.speak_tools import SpeakTools
 from tools.reminder_tools import ReminderTools
 from tools.todo_tools import TodoTools
+from tools.search_tools import SearchTools
 
 class App:
     """Tiny agent main application class. Implements the main wireup and event queue"""
@@ -78,6 +79,8 @@ class App:
             tools.add(email_tools.make_tools())
         if self.config.todo:
             tools.add(TodoTools(self.config.todo).make_tools())
+        if self.config.web_search and self.config.web_search.enabled:
+            tools.add(SearchTools().make_tools())
 
         return tools
 
