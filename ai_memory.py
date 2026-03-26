@@ -57,11 +57,6 @@ class CreateMemoriesData(BaseModel):
     chatbot_response: str
     active_memories: list[str]
 
-# TODO: 
-# - Log/report tool calls, and other LLM output somewhere
-# - Save/load memory to file
-# - Stem keywords
-
 class AIMemory:
     """Basic AI memory service, for extracting and retrieving memories during conversation"""
     
