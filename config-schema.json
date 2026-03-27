@@ -30,6 +30,10 @@
                 "prompt_token_limit": {
                     "type": "number",
                     "description": "Prompt size limit in tokens. History messages will be removed once limit is reached."
+                },
+                "prompt_token_target": {
+                    "type": "number",
+                    "description": "Target token count when removing history messages. Setting this slightly lower than prompt_token_limit reduces the number of context history trims and can allow LLMs to optimise context processing"
                 }
             },
             "required":["name"]

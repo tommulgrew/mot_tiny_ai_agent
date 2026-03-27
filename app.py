@@ -36,14 +36,14 @@ class App:
             config=self.config.memory, 
             agent_config=self.config.agent
         )
-        working_memory = AIWorkingMemory(config=self.config.memory)
+#        working_memory = AIWorkingMemory(config=self.config.memory)
         tools = self._create_ai_tools()
-        tools.add(working_memory.make_tools())
+#        tools.add(working_memory.make_tools())
         self.agent = AIAgent(
             config=self.config.agent,
             client=client, 
             memory=memory,
-            working_memory=working_memory, 
+#            working_memory=working_memory, 
             tools=tools, 
             output_callback=output_callback
         )

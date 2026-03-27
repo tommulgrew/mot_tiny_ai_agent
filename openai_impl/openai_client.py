@@ -101,7 +101,12 @@ class OpenAIChatClient(AIChatClient):
                 return AIChatResponse(history=history, new_messages=new_messages)
 
             # Trim history if estimated token size exceeds threshold
-            self.context_manager.trim_to_limit(history, self.config.prompt_token_limit, is_system_info_callback)
+            if history.token_count > self.config.prompt_token_limit:
+                self.context_manager.trim_to_limit(
+                    history, 
+                    token_limit=self.config.prompt_token_target or self.config.prompt_token_limit, 
+                    is_system_info_callback=is_system_info_callback
+                )
 
             self.chat_logger.debug("Chat API request: %s", log_dump([ system_message, *additional_context_messages, *history.messages ]))            
 

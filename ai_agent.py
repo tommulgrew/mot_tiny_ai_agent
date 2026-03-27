@@ -55,8 +55,8 @@ class AIAgent:
             config: AgentConfig, 
             client: AIChatClient, 
             memory: AIMemory,
-            working_memory: AIWorkingMemory | None,
-            tools: AITools | None, 
+            working_memory: AIWorkingMemory | None = None,
+            tools: AITools | None = None, 
             output_callback: Callable[[str], None] | None = None):
         self.logger = logging.getLogger("tinyagent.agent")
         self.message_history_storage_path = Path("chat_context.jsonl")
