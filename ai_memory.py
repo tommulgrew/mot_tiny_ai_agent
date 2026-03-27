@@ -93,6 +93,7 @@ class AIMemory:
         self.housekeeping_queue = asyncio.Queue()
         asyncio.create_task(self._extraction_worker())
         asyncio.create_task(self._housekeeping_worker())
+        asyncio.create_task(self._random_housekeeping_worker())
 
     def create_memories(self, new_messages: list, active_memories: list[str]):
         """Create memories from a snippet of conversation"""
@@ -108,6 +109,9 @@ class AIMemory:
         self.extraction_queue.put_nowait(CreateMemoriesTask(conversation=data_json))
 
     def retrieve(self, conversation: str, housekeeping: bool = True) -> list[str]:
+        return [m.fact for m in self.retrieve_memories(conversation, housekeeping)]
+
+    def retrieve_memories(self, conversation: str, housekeeping: bool = True) -> list[AISavedMemory]:
         """Retrieve memories based on snippet of conversation"""
 
         # Add mapped keywords
@@ -132,7 +136,7 @@ class AIMemory:
             memories = memories[:self.config.retrieve_memory_limit]
 
         # Return facts
-        return [m.fact for m in memories]
+        return memories
 
     async def _extraction_worker(self):
         """Main 'extract memories' worker loop"""
@@ -157,6 +161,15 @@ class AIMemory:
                 await self._housekeep_memories(task.memories)
             finally:
                 self.housekeeping_queue.task_done()
+
+    async def _random_housekeeping_worker(self):
+        while True:
+
+            # Queue a random housekeeping task every 5 minutes, if the user has been inactive for 30 minutes
+            # and there are no other queued tasks.
+            if self.housekeeping_queue.empty() and not self._is_user_active(timedelta(minutes=30)):
+                self._housekeep_random()
+            await asyncio.sleep(300)
 
     async def _do_chat_tool_operation(self, system_prompt: str, user_prompt: str, tools: AITools):
         try:
@@ -215,6 +228,9 @@ class AIMemory:
             tools=self.housekeeping_tools
         )
 
+        # Duplicate groups. Stored as a set of message IDs.
+        duplicate_groups:list[set[int]] = []
+
         # Resolve reported duplicates and conflicts
         for a in self.housekeeping_actions:
 
@@ -229,13 +245,39 @@ class AIMemory:
                 self.memories.remove(memories[0])
             
             elif a.type == "duplicate":
-                # Merge keywords from newer memory into older
-                memories[0].keywords = list(set([*memories[0].keywords, *memories[1].keywords]))
-
-                # Remove newer memory
-                self.memories.remove(memories[1])
+                duplicate_groups.append(set(m.id for m in memories))
 
             self.dirty = True
+
+        # Merge duplicate groups
+        while True:
+            overlaps = [
+                (s, next((s2 for s2 in duplicate_groups if s2 != s and s.intersection(s2)),None))
+                for s in duplicate_groups
+            ]
+            overlap = next(((a, b) for a, b in overlaps if b), None)
+            if not overlap:
+                break
+            
+            # Combine groups
+            a, b = overlap
+            duplicate_groups.remove(a)
+            duplicate_groups.remove(b)
+            duplicate_groups.append(a.union(b))
+
+        for g in duplicate_groups:
+            duplicates = [next(((m for m in self.memories if m.id == id)), None) for id in g]
+            duplicates = [m for m in duplicates if m]
+            if not duplicates:
+                continue
+
+            # Move oldest to top.
+            # Combine all keywords and assign to oldest.
+            # Remove the rest.
+            duplicates.sort(key=lambda x: x.when_created)
+            duplicates[0].keywords = list(set(kw for d in duplicates for kw in d.keywords))
+            for d in duplicates[1:]:
+                self.memories.remove(d)
             
         if self.dirty:
             self._save()
@@ -379,7 +421,23 @@ class AIMemory:
         if self.user_last_active_callback:
             return datetime.now() - self.user_last_active_callback() < timespan
         else:
-            return False        # User activity information is unavailable. Proceed as if the user is offline.        
+            return False        # User activity information is unavailable. Proceed as if the user is offline.     
+
+    def _housekeep_random(self):
+        """Perform housekeeping for a random memory"""
+        if not self.memories:
+            return
+
+        # Select a random memory
+        memory = random.choice(self.memories)
+
+        # Find related memories
+        related = self.retrieve_memories(" ".join(memory.keywords), housekeeping=False)
+        if not memory in related:
+            related.append(memory)
+
+        # Queue a housekeeping task
+        self.housekeeping_queue.put_nowait(MemoryHousekeepingTask(memories=related))
 
 def create_ai_prompts(agent_config: AgentConfig) -> AIMemoryPrompts:
 
