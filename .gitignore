@@ -217,6 +217,7 @@ __marimo__/
 
 config.json
 memory.json
+memory.jsonl
 reminders.json
 email_state.json
 tasks.json

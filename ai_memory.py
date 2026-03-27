@@ -350,14 +350,16 @@ class AIMemory:
     def _load(self):
         if self.storage_path.exists():
             with open(self.storage_path, encoding="utf-8") as f:
-                file = AIMemoryFile.model_validate_json(f.read())
-                self.memories = file.memories
-                self.id_generator = file.id_generator
+                file_text = self.storage_path.read_text(encoding="utf-8")            
+                lines = file_text.splitlines()
+                self.id_generator = int(lines[0])
+                memory_lines = lines[1:]
+                self.memories = [AISavedMemory.model_validate_json(line) for line in memory_lines]
 
     def _save(self):
-        file = AIMemoryFile(memories=self.memories, id_generator=self.id_generator)
-        json_text = file.model_dump_json(indent=2)
-        self.storage_path.write_text(json_text, encoding="utf-8")
+        memory_text = "\n".join(m.model_dump_json() for m in self.memories)
+        file_text = f"{self.id_generator}\n{memory_text}"
+        self.storage_path.write_text(file_text, encoding="utf-8")
         self.dirty = False
 
     def _make_keyword_mappings(self) -> list[KeywordMapping]:
@@ -400,6 +402,7 @@ ONLY capture medium/long term memories, like the user's name, or locations of co
 DO NOT capture memories that will be irrelevant in 30 minutes time.
 DO NOT record "User wants to open Word", or "User wants to search for philosophy quotes" - these are transient tasks, not long term memories.
 DO NOT record information from "active_memories" - these memories have already been recorded.
+DO NOT record which email addresses the user receives email from, or information from unsolicited emails - this is low value information.
 
 {built_in_knowledge_str}
 
@@ -414,7 +417,7 @@ For each memory, include a set of appropriate keywords that will trigger the mem
 
 Break down memories into discrete meaningful pieces of information, and record them separately.
 DO NOT record "User has a son named Brian who likes fishing and camping." as a single memory.
-INSTEAD record "User has a son named Brian." and "Brian likes fishing and camping." as two separate memories.
+INSTEAD record "User has a son named Brian.", "Brian likes fishing.", and "Brian likes camping." as separate memories.
 
 Use the save_memory tool once for each memory, one at a time.
 Wait for each tool call to complete before making the next one.
