@@ -1,6 +1,9 @@
 from typing import Literal
 from pydantic import BaseModel
 
+class LoggingConfig(BaseModel):
+    level: str = "INFO"
+
 # LLM model config
 class ModelConfig(BaseModel):
     """LLM service configuration"""
@@ -91,6 +94,7 @@ class Config(BaseModel):
     memory: MemoryConfig
     agent: AgentConfig
     speech_to_text: SpeechToTextConfig
+    logging: LoggingConfig | None = None
     allowed_apps: list[AppConfig] | None = None
     email: EmailConfig | None = None
     todo: TodoConfig | None = None

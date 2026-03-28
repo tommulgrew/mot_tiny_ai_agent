@@ -8,6 +8,23 @@
         "$schema": {
             "type": "string"
         },
+        "logging": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+                "level": {
+                    "enum": [
+                        "CRITICAL",
+                        "FATAL",
+                        "ERROR",
+                        "WARN",
+                        "WARNING",
+                        "INFO",
+                        "DEBUG"
+                    ]
+                }
+            }
+        },
         "model": {
             "type": "object",
             "additionalProperties": false,

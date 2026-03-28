@@ -29,6 +29,11 @@ class App:
         self.config = load_config(args.config)
         self.output_callback = output_callback
 
+        # Log level
+        if self.config.logging:
+            log_level = logging.getLevelNamesMapping()[self.config.logging.level]
+            self.logger.setLevel(log_level)
+
         # Wire up agent
         client = OpenAIChatClient(config=self.config.model)
         memory = AIMemory(
