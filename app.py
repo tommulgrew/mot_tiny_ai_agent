@@ -1,6 +1,7 @@
 from datetime import datetime, timedelta
 import logging
 from pathlib import Path
+import random
 from typing import Callable
 from ai_memory import AIMemory
 from ai_working_memory import AIWorkingMemory
@@ -108,10 +109,18 @@ class App:
             # Timer event fires every 15 minutes, if the user has been inactive
             # for at least 10 minutes
             await asyncio.sleep(900)
-            if datetime.now() - self.agent.user_last_active >= timedelta(minutes=10):
-                self.agent.system_event({
+            
+            inactive_time = datetime.now() - self.agent.user_last_active
+            if inactive_time >= timedelta(minutes=10):
+                event = {
                     "system_event": {
                         "type": "timer",
                         "message" : "This is a 15-minute periodic timer event"
                     }
-                })
+                }
+
+                # 25% chance of suggesting a random action from "idle_suggestions"
+                if self.config.idle_suggestions and inactive_time >= timedelta(minutes=30) and random.random() < 0.25:
+                    event["system_event"]["suggested_action"] = random.choice(self.config.idle_suggestions)
+
+                self.agent.system_event(event)

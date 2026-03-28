@@ -101,6 +101,7 @@ class Config(BaseModel):
     reminders: ReminderConfig | None = None
     speak: SpeakConfig | None = None
     web_search: WebSearchConfig | None = None
+    idle_suggestions: list[str] | None = None
 
 def load_config(path: str) -> Config:
     with open(path, encoding="utf-8") as f:

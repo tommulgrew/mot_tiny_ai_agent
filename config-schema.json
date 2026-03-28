@@ -309,7 +309,11 @@
                     }
                 }
             }
-        }
+        },
+        "idle_suggestions": {
+            "type": "array",
+            "items": { "type": "string" }
+        }        
     },
     "required": ["model"]
 }
